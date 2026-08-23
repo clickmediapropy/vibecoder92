@@ -13,3 +13,7 @@ Plugin marketplace. Install:
 | [usegrok](plugins/usegrok) | Delegate a single coding task to Grok CLI headless (`grok -p`); Claude orchestrates and verifies. |
 
 Each plugin lives in `plugins/<name>/` with its own `.claude-plugin/plugin.json` and README. MIT.
+
+---
+
+Made by [nicodelgado.dev](https://nicodelgado.dev)

@@ -13,3 +13,7 @@ Delegate planning, auditing, fixing, or any read/write coding task to **Grok CLI
 
 ## Usage
 `/usegrok <task>` — single task on Grok. For multi-task parallel builds use the `grok-swarm` plugin (which bundles this skill).
+
+---
+
+Made by [nicodelgado.dev](https://nicodelgado.dev)

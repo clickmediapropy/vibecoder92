@@ -372,3 +372,7 @@ grok sessions list -n 10 ; grok sessions search "keyword" ; grok sessions delete
 grok models ; (cd <repo> && grok inspect --json) ; grok doctor --json ; grok --version
 export XAI_API_KEY="xai-..." ; grok login --device-auth
 ```
+
+---
+
+Made by [nicodelgado.dev](https://nicodelgado.dev).

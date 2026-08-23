@@ -73,3 +73,7 @@ Remaining risk:
 ```
 
 Omit sections that do not apply.
+
+---
+
+Made by [nicodelgado.dev](https://nicodelgado.dev).

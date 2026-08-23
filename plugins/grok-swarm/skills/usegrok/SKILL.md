@@ -301,3 +301,7 @@ If auth fails, surface to the user — they may need to run interactive `grok lo
 - Verification uses the repo's own check commands — discovered, not assumed.
 - Orchestrator may only: read files, run verification commands, launch/monitor the CLI, talk to the user.
 - One focused task per run; chain fix rounds with `-c`/`--resume`; cap at ~3 rounds then escalate to the user.
+
+---
+
+Made by [nicodelgado.dev](https://nicodelgado.dev).

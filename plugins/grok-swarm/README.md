@@ -34,3 +34,7 @@ Dashboard: http://127.0.0.1:4599/ . The `swarm` CLI lives at `${CLAUDE_PLUGIN_RO
 | `double-check` | Mandatory pre-merge self-review protocol every builder runs |
 
 State lives in `<repo>/.grok-swarm/` and worktrees under `~/.grok/worktrees/`; add `.grok-swarm/` to your repo's `.gitignore`.
+
+---
+
+Made by [nicodelgado.dev](https://nicodelgado.dev)
