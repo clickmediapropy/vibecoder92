@@ -425,6 +425,7 @@ if [[ "$PRINT_ONLY" -eq 1 ]]; then
 fi
 
 export SWARM_AGENT_NAME="$AGENT"
+export GROK_SWARM_MUTE_CHIME=1
 if [[ -n "${SWARM_ID:-}" ]]; then
   export SWARM_ID
 fi
