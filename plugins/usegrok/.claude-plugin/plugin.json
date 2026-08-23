@@ -1,0 +1,7 @@
+{
+  "name": "usegrok",
+  "version": "1.0.0",
+  "description": "Delegate any coding task to Grok CLI in headless print mode (grok -p): Claude writes a self-contained prompt, runs Grok, and verifies the result. Includes the full Grok CLI flag reference.",
+  "author": { "name": "Nico Delgado", "email": "famigliadelgadobreuer@gmail.com" },
+  "keywords": ["grok", "delegation", "headless", "xai"]
+}
