@@ -1,96 +1,69 @@
 ---
 name: usegrok
-description: Delegates planning, auditing, fixing, and any read/write coding task to the Grok CLI (`grok`) in headless print mode (`-p`). The current model acts only as orchestrator and verifier — crafts self-contained prompts, runs `grok -p`, and verifies the result. Use when the user says usegrok, "delegate to grok", "ask grok", or wants a single task run on Grok CLI.
+description: Use when the user says usegrok, "delegate to grok", "ask grok", or wants a single headless Grok CLI (`grok -p`) task from Claude, Codex, Cursor, or Muse. Not for multi-task parallel builds (use grok-swarm) and not when already inside an interactive Grok session.
 ---
 
-# usegrok — Orchestrate the Grok CLI (`grok`)
+# usegrok
 
-`grok` is **xAI's** agentic coding CLI (Grok Build). When this skill is active, the current model is the **orchestrator only**. It MUST NOT plan, audit, fix, or implement directly. Every task involving code — planning, auditing, fixing, refactoring, building, testing — is delegated to `grok -p`.
+Single-task headless `grok -p` from another parent. You are the **orchestrator**: craft the prompt, launch, monitor, verify. Grok does the work.
 
-This skill is **stack-agnostic**: it never assumes a language, framework, or toolchain. The target repo's own guidance files and check commands are discovered per run.
+Verified against **grok 1.0.5**. `grok --help` wins if this file lags. Flag dump: [GROK-CLI-REFERENCE.md](GROK-CLI-REFERENCE.md).
 
-## Role split
+## When
 
-| Role | Who | Does |
-|------|-----|------|
-| Orchestrator | Current model | Decompose requests, discover repo context, craft prompts, launch/monitor CLI, verify, report |
-| Implementer | `grok` | All actual work, default model `grok-4.6` |
+| Use | Don't |
+|-----|--------|
+| One focused plan / audit / fix / implement | 2+ independent domains → **grok-swarm** |
+| Cross-parent hand (Claude/Codex/Cursor/Muse → Grok) | Already in an interactive Grok session → do the work yourself |
+| User says usegrok / "delegate to grok" / "ask grok" | Parallel `grok -p` writers on the same checkout |
 
-## Base command (always use)
+## Invoke
 
 ```bash
-grok -p "PROMPT" \
-  --cwd /path/to/repo \
+grok --prompt-file /tmp/grok-<slug>.md \
+  --cwd /absolute/path/to/repo \
   -m grok-4.6 \
-  --always-approve
+  --always-approve \
+  --output-format streaming-json
 ```
 
-**Mandatory on every run:**
-- `-p` / `--single` — headless single-turn mode; prints response and exits. **Never** launch the interactive TUI for delegation.
-- `--always-approve` (alias `--yolo`) — auto-approve tool executions; without it a headless run hangs on the first permission prompt.
-- `--cwd <PATH>` — absolute path to the repo root (or subproject in a monorepo). Grok walks up to `.git` and loads project instructions/skills from there.
-- `-m <MODEL>` — model ID from `grok models` (not a display name with spaces).
+Exactly one prompt source: `--prompt-file` (preferred) **or** `-p` **or** `--prompt-json`. Never combine them (`'--single <PROMPT>' cannot be used with '--prompt-file'`).
 
-**Useful add-ons:**
-- `--output-format streaming-json` — newline-delimited events for live monitoring (preferred for long runs).
-- `--output-format json` — single JSON object at end; includes `sessionId` for resume.
-- `--effort high` — harder reasoning (headless only): `low`, `medium`, `high`, `xhigh`, `max`.
-- `--check` — append a self-verification loop before finishing (headless only).
-- `--max-turns <N>` — cap agent turns.
-- `--sandbox <PROFILE>` — restrict filesystem/network for untrusted code.
-- `--disable-web-search` — remove web_search/web_fetch.
-- `GROK_LOG_FILE=/tmp/grok-<slug>.log` — pin log path for debugging.
-- `--no-auto-update` — skip update checks in CI.
+Every run needs `--always-approve` (headless hangs on the first permission prompt without it), `--cwd` (absolute), and `-m grok-4.6` (`grok models`; do not invent ids).
 
-> Grok has **built-in** `--worktree`, `--output-format json|streaming-json`, and `grok sessions list`. Use them instead of hand-rolled substitutes.
+| Task | Extra flags |
+|------|-------------|
+| Plan / audit (no edits) | `--permission-mode plan --disallowed-tools "search_replace,write"` + prompt: do not edit files. Then `git status` must be clean. If plan mode exits after one line, rerun without `--permission-mode plan` and keep the denylist + prompt. |
+| Investigate (no edits) | `--tools "read_file,grep,list_dir"` |
+| Implement / fix / test | (base flags). Hard bug: `--effort high` or `xhigh`. |
+| Untrusted code | `--sandbox workspace` or `strict` |
+| Parseable result | `--output-format json` (implies wait-until-end). `--json-schema '{...}'` constrains the model's JSON and implies `json`. |
 
-## Models — default grok-4.6 (Grok 4.6)
+**Dead flags (1.0.5 rejects):** `--check`, `--best-of-n`. Do not pass them.
 
-**Default every delegated run to `grok-4.6`.** That is the current Grok 4.6 model (CLI id from `grok models`; also the CLI default). Do **not** use `grok-composer-2.5-fast` unless the user explicitly asks.
+**Worktree:** `grok -p --worktree` does **not** create a worktree. Isolation for one experimental run: `${CLAUDE_PLUGIN_ROOT}/skills/grok-swarm/bin/dispatch-grok.sh --mode new …`. Multi-task: grok-swarm, not this skill.
 
-| Model | Use for |
-|-------|---------|
-| `grok-4.6` | **Default for everything** — plan, audit, implement, fix, refactor, hard reasoning |
-| `grok-build` | Optional override only for build-heavy / large multi-file / repo-wide refactors when the user wants it |
+## Workflow
 
-List models: `grok models`. If a task feels too hard, tighten the prompt, split the task, bump `--effort high`, or run a fix round with `-c` — don't switch models casually.
+1. **Decompose** — one focused task, explicit files in / files out.
+2. **Read repo** — `AGENTS.md` / `CLAUDE.md`; `grok inspect --cwd <repo>` if you need what Grok will load. Note the repo's own check commands.
+3. **Prompt** — write `/tmp/grok-<slug>.md` (self-contained; this conversation is invisible to Grok).
+4. **Pre-flight** — only if the last run failed on auth: `grok models`. Login: cached `grok login`, or `XAI_API_KEY`, or `grok login --device-auth`.
+5. **Delegate** — harness **background** (Grok: `background: true`; Cursor: `block_until_ms: 0`, no trailing `&`). Stream to a log. Poll. Kill and redelegate if it edits the wrong files.
+6. **Verify (orchestrator, read-only)** — `git status` / `git diff` (scope), read changed files, run **the repo's** checks. Never assume a toolchain. Never edit files yourself.
+7. **Fix** — `grok --prompt-file <fix.md> --cwd <repo> -c` (or `-r <sessionId>`) with the exact failing output. Same `-m`. Cap ~3 rounds, then report the blocker.
 
-## Task type → invocation
+Quick tasks (< ~30s) may run in the foreground. Still capture a log.
 
-| Task | Model | Extra flags |
-|------|-------|-------------|
-| Plan, audit, architecture review (read-only) | `grok-4.6` | `--disallowed-tools "search_replace,write"` + prompt enforces no edits |
-| Explain, Q&A, investigate (no edits) | `grok-4.6` | `--tools "read_file,grep,list_dir"` |
-| Implement, fix, refactor, test | `grok-4.6` | `--check` optional |
-| Hard reasoning / tricky bug | `grok-4.6` | `--effort high` or `xhigh` |
-| Large repo-wide refactor | `grok-build` | `--effort high` |
-| Untrusted code execution | any | `--sandbox <PROFILE>` |
-| Isolated parallel writes | any | `--worktree <name>` per run |
-| Best-of-N quality pass | any | `--best-of-n <N>` (headless only) |
+## Prompt
 
-There is no read-only CLI mode, so **read-only is enforced by tool restriction + prompt** and verified afterward via `git status`/`git diff`. For audits/plans, the prompt MUST say: *"Do NOT modify, create, or delete any files. Produce only a written plan/audit."*
+Spawned Grok has **no** parent-conversation context. Every prompt includes, in order:
 
-**Examples:**
-
-```bash
-# Plan / audit (read-only enforced in prompt + tools)
-grok -p "Read-only: audit the authentication flow. Do NOT edit any files. Output findings + a remediation plan." \
-  --cwd /path/to/repo -m grok-4.6 --always-approve --effort high \
-  --disallowed-tools "search_replace,write"
-
-# Implement
-grok -p "Add input validation to the user-registration handler; follow the repo's existing validation pattern." \
-  --cwd /path/to/repo -m grok-4.6 --always-approve --check
-
-# Isolated worktree (safe parallel or experimental edits)
-grok -p "Fix the duplicate-event handling in the webhook processor." \
-  --cwd /path/to/repo --worktree fix-webhook-dedupe \
-  -m grok-4.6 --always-approve
-```
-
-## Repo alignment (mandatory in every prompt)
-
-Grok auto-discovers project instructions (`AGENTS.md`, `CLAUDE.md`, rules dirs, skills) from `--cwd`. Still include this block in every delegated prompt so the spawned run prioritizes them:
+1. Repo alignment block (below)
+2. Goal + deliverable + files in / files out
+3. Paths, skills, and constraints taken from the repo guidance
+4. Verification commands **from that repo**
+5. Audits: "Do NOT modify, create, or delete any files."
 
 ```
 Before doing anything else:
@@ -100,207 +73,71 @@ Before doing anything else:
 4. Do not relitigate decisions documented there; surface genuine product forks to the orchestrator instead of choosing silently.
 ```
 
-The orchestrator must read the repo guidance itself **before crafting the prompt** — that is where the repo's real check commands, conventions, and constraints live — and can run `grok inspect --cwd <repo>` to see exactly what Grok will load.
+## Sessions
 
-## Prompt rules
-
-Spawned `grok -p` runs have **no access to this conversation**. Every prompt must be self-contained:
-
-- **Repo alignment block** (above) — always first
-- Goal and expected deliverable, with explicit scope boundaries (what NOT to touch)
-- Relevant file paths and any domain skills/rules that apply
-- Constraints pulled from the repo guidance (security invariants, testing policy, style)
-- Verification the agent must run before finishing — **use the repo's own commands** (from its guidance or manifest), not assumed ones
-- For audits/plans: explicit **"do not edit files"**
-
-Pass large prompts via `--prompt-file /tmp/grok-<slug>-prompt.md` when the shell would mangle quotes.
-
-## Sessions (fix loop)
+First run with `--output-format json` (or parse `sessionId` from a streaming `end` event) if you expect a fix loop.
 
 ```bash
-# 1. First delegation (capture sessionId from JSON output)
-grok -p "TASK PROMPT" \
-  --cwd /path/to/repo -m grok-4.6 --always-approve \
-  --output-format json | tee /tmp/grok-task.json
-
-SESSION_ID=$(jq -r '.sessionId' /tmp/grok-task.json)
-
-# 2. Fix round — resume the SAME session
-grok -p "Fix: [exact issues from verification]" \
-  --cwd /path/to/repo --resume "$SESSION_ID" \
+# Continue most recent session for this --cwd
+grok --prompt-file /tmp/grok-fix.md --cwd /path/to/repo -c \
   -m grok-4.6 --always-approve
 
-# Or continue most recent session in this cwd:
-grok -c -p "Fix: ..." --cwd /path/to/repo -m grok-4.6 --always-approve
+# Resume a captured id (UUID-shaped values are always ids; titles match current dir)
+grok --prompt-file /tmp/grok-fix.md --cwd /path/to/repo -r "$SESSION_ID" \
+  -m grok-4.6 --always-approve
 ```
 
-- **`-c` / `--continue`** — resume the most recent session for the current `--cwd`. Primary fix-loop when you didn't capture `sessionId`.
-- **`--resume <ID>`** — resume a specific session (from JSON `sessionId` or `grok sessions list`).
-- **Fresh run** — omit `-c`/`--resume` when prior context would contaminate (wrong approach taken, scope changed).
+Keep the same `-m` on resume. Wrong model → `MODEL_SWITCH_INCOMPATIBLE_AGENT`: fresh run, no `-r`. Scope changed or the first approach is wrong → omit `-c`/`-r`. Optional: `--fork-session` with `-r`/`-c` to keep the original session clean.
 
-List sessions: `grok sessions list -n 10`. Cap fix rounds at ~3; then report the blocker to the user with the evidence gathered.
+`grok sessions list -n 10`
 
-## Live progress monitoring (mandatory)
+## Monitor
 
-The orchestrator MUST NOT fire-and-forget a `grok` run. For long tasks, use **streaming-json** into a log and poll:
+Never fire-and-forget. For long runs:
 
 ```bash
-SLUG="add-rate-limiter"
-LOG="/tmp/grok-${SLUG}.log"
-
-grok -p "PROMPT" \
-  --cwd /path/to/repo \
-  -m grok-4.6 \
-  --always-approve \
-  --output-format streaming-json \
-  > "$LOG" 2>&1 &
-```
-
-While it runs:
-
-1. **Poll** `tail -n 20 "$LOG"` every few seconds; parse `type` (`text`, `thought`, `end`, `error`).
-2. **Report** concise live updates (files edited, commands run, blockers).
-3. **Intervene early** if off-scope — kill the run and redelegate with a tighter prompt. A run editing the wrong files for 5 minutes is 5 minutes of cleanup.
-
-For quick tasks (< ~30s), foreground is fine — still capture to a log.
-
-**Failure signatures:**
-
-| Symptom | Cause → action |
-|---------|----------------|
-| Hangs immediately, no output | Missing `--always-approve` → kill, relaunch with it |
-| `{"type":"error",...}` in log | Auth/session failure → pre-flight (`grok models`), surface to user if login needed |
-| Edits outside the stated scope | Prompt scope too loose → kill, redelegate with explicit "only touch X; do not touch Y" |
-| Loops on the same failing step | Context rut → `-c`/`--resume` with a corrective prompt, or `--effort high`, or fresh run |
-
-## Parallel dispatch (multiple grok runs)
-
-When the task splits into **independent domains**, dispatch **one `grok` run per domain in parallel** — built-in worktrees give write isolation:
-
-```bash
-REPO=/path/to/repo
-BASE=$(git -C "$REPO" rev-parse HEAD)
-
-# Mode A — always --cwd "$REPO" (main repo), never --cwd a worktree path for NEW work
-# Cursor/harness: block_until_ms=0, NO trailing &
-SWARM_AGENT_NAME="Builder A" grok --prompt-file /tmp/grok-domain-a.md \
-  --cwd "$REPO" --worktree wt-domain-a --worktree-ref "$BASE" \
-  -m grok-4.6 --always-approve --no-subagents \
-  --output-format streaming-json > /tmp/grok-domain-a.log 2>&1
-
-SWARM_AGENT_NAME="Builder B" grok --prompt-file /tmp/grok-domain-b.md \
-  --cwd "$REPO" --worktree wt-domain-b --worktree-ref "$BASE" \
-  -m grok-4.6 --always-approve --no-subagents \
-  --output-format streaming-json > /tmp/grok-domain-b.log 2>&1
-
-# Poll both logs; review diffs; merge worktrees; run full verification.
-grok worktree list
-```
-
-For swarms, prefer `${CLAUDE_PLUGIN_ROOT}/skills/grok-swarm/bin/dispatch-grok.sh` — see `/grok-swarm` Mode A/B/C/D.
-
-**Use when:** subtasks touch disjoint files/subsystems and each is self-contained after reading the repo guidance.
-
-**Don't use when:** the failures may share one root cause (investigate together first), or the runs would edit the **same files** — worktree isolation prevents corruption but not merge conflicts you'll have to resolve.
-
-Each parallel prompt must state: **scope** (one domain only), **constraints** (don't touch other subsystems), **deliverable** (summary + changes + verification run).
-
-## Structured output
-
-Use `--output-format json` for parseable final results:
-
-```bash
-grok -p "...do the work... Then print ONLY a JSON object on the final line: {\"filesChanged\":[],\"summary\":\"\",\"testsRun\":\"\"}" \
+LOG=/tmp/grok-<slug>.log
+grok --prompt-file /tmp/grok-<slug>.md \
   --cwd /path/to/repo -m grok-4.6 --always-approve \
-  --output-format json | jq -r '.text'
+  --output-format streaming-json > "$LOG" 2>&1
 ```
 
-On failure, check for `{"type":"error","message":"..."}` before reading `.text`.
+Poll `tail -n 20 "$LOG"`. Switch on `type`: `text`, `thought`, `tool_call`, `end`, `error`. Report files edited and commands run. Intervene early on scope drift.
 
-## Isolation: sandbox, tools, worktree
+`--output-format json` is the final object (`text`, `sessionId`, `stopReason`). Check `{"type":"error","message":"..."}` before reading `.text`. Exit `0` = success, `1` = error, `130`/`143` = interrupted (resume with `-r`/`-c`; file edits are not rolled back).
 
-```bash
-# Read-only tool allowlist
-grok -p "Audit only" --tools "read_file,grep,list_dir" \
-  --cwd /path/to/repo -m grok-4.6 --always-approve
+## Failures
 
-# Deny file writes and shell
-grok -p "Review" --disallowed-tools "search_replace,write,run_terminal_cmd" \
-  --cwd /path/to/repo -m grok-4.6 --always-approve
-
-# Sandbox profile
-grok -p "TASK" --sandbox <PROFILE> \
-  --cwd /path/to/repo -m grok-4.6 --always-approve
-
-# Isolated git worktree (built-in) — NEW work from main repo only
-grok -p "TASK" --worktree feat-name --worktree-ref HEAD \
-  --cwd /path/to/repo -m grok-4.6 --always-approve
-```
-
-To work in a different repo, point `--cwd` at that repo's root (or subproject path inside a monorepo).
-
-## Worktree cwd footgun (critical for swarms)
-
-Grok's `--cwd` loads project instructions (AGENTS.md, skills) but **does not reliably set the shell cwd** for `run_terminal_cmd`. Observed failure: `--cwd ~/.grok/worktrees/.../wt-X` while the shell still runs in the main repo → edits land in master.
-
-| Intent | Correct pattern |
-|--------|-----------------|
-| **New parallel work** | `--cwd "$MAIN_REPO" --worktree wt-name --worktree-ref "$BASE"` (Mode A) |
-| **Continue existing worktree** | Start the process **inside** the worktree directory (`cd "$WT_PATH"` or Cursor `working_directory`); omit `--worktree` (Mode B) |
-| **Resume session in existing worktree** | `--cwd "$WT_PATH" -r "$SESSION_ID"` with the **same `-m`** as the original (Mode C) |
-| **Fork session to new worktree** | `grok -w -r "$SESSION_ID"` per [xAI Worktrees docs](https://docs.x.ai/build/features/worktrees) (Mode D) |
-
-**Never:** `-r` without `--cwd "$WT_PATH"` when continuing `wt-*` partial work. **Never:** `--cwd` pointing at `~/.grok/worktrees/...` for new parallel builders.
-
-Full swarm dispatch modes: `/grok-swarm` and `${CLAUDE_PLUGIN_ROOT}/skills/grok-swarm/bin/dispatch-grok.sh`.
-
-## Pre-flight (auth / setup failures)
-
-```bash
-grok models                    # lists models → confirms auth
-grok inspect --cwd <repo>      # project instructions, skills, permissions grok will load
-grok sessions list -n 5        # recent sessions
-grok update                    # update CLI if behavior looks stale
-```
-
-**Auth for headless:**
-- Cached login from `grok login` (automatic)
-- CI/headless: `export XAI_API_KEY="xai-..."`
-- Remote/no browser: `grok login --device-auth`
-
-If auth fails, surface to the user — they may need to run interactive `grok login` once.
-
-## Orchestrator workflow
-
-```
-1. Decompose  → split the request into delegable tasks with explicit scopes
-2. Read repo  → agent guidance (AGENTS.md/CLAUDE.md), note its check commands; grok inspect --cwd <repo>
-3. Pre-flight → grok models if a run just failed on auth
-4. Delegate   → grok -p in background; streaming-json log; monitor live
-5. Verify     → read-only: git status/diff, read changed files, run THE REPO'S OWN checks
-6. Fix loop   → grok -c or --resume with the exact failure evidence (max ~3 rounds)
-7. Report     → what was delegated, live milestones, results, verification output, remaining issues
-```
-
-**Verification (orchestrator only, read-only):**
-- `git status` / `git diff` — scope check: no unrelated changes, no files outside the stated scope
-- Read the changed files — conventions and correctness, not just "it exists"
-- Run checks — **the commands the repo itself defines** (in its agent guidance, manifest scripts, Makefile, CI config). Never assume a toolchain; discover it.
-- Never edit files yourself
-
-**If verification fails:** do NOT fix it yourself. Delegate the fix via `grok -c`/`--resume` with the exact failing output pasted in.
+| Symptom | Action |
+|---------|--------|
+| Hangs immediately, no output | Missing `--always-approve` → kill, relaunch with it |
+| `unexpected argument '--check'` / `'--best-of-n'` | Dead flags → drop them |
+| `'--single <PROMPT>' cannot be used with '--prompt-file'` | One prompt source only |
+| `{"type":"error",...}` / auth | `grok models`; if login needed, surface it |
+| Edits outside scope | Kill; tighter files-in / files-out |
+| Loops the same failing step | `-c`/`-r` with the exact error, or `--effort high`, or fresh run |
+| `MODEL_SWITCH_INCOMPATIBLE_AGENT` | Fresh run, same or corrected `-m`, no `-r` |
 
 ## Hard rules
 
-- Never edit files directly. All edits go through `grok -p`.
-- Always `-p` + `--always-approve`; always `--cwd`; always default `-m grok-4.6` (Grok 4.6). Never default to `grok-composer-2.5-fast`.
-- Every prompt includes the repo-alignment block; the orchestrator reads the repo guidance before prompting.
-- Read-only work is enforced by tool restriction + prompt, and verified afterward with `git status`.
-- **Never fire-and-forget** — stream to a log; monitor live; intervene early.
-- **Parallel writes only with `--worktree`** — never two concurrent write-runs on the same working tree.
-- Verification uses the repo's own check commands — discovered, not assumed.
-- Orchestrator may only: read files, run verification commands, launch/monitor the CLI, talk to the user.
-- One focused task per run; chain fix rounds with `-c`/`--resume`; cap at ~3 rounds then escalate to the user.
+- Never edit the target repo yourself. Fixes go through `grok -p` / `-c` / `-r`.
+- Always `--always-approve`, `--cwd`, `-m grok-4.6`.
+- Never `--check` or `--best-of-n`. Never `-p` plus `--prompt-file`.
+- Never `grok -p --worktree` for isolation. Never two concurrent write-runs on the same working tree.
+- Never fire-and-forget. Verify with the repo's own checks.
+
+## Red flags — still follow the skill
+
+- "I'll just save this one-liner" / a senior says skip the delegate
+- `--check` or `grok -p --worktree` because training data or a 20-minute demo
+- Nested `grok -p` from an interactive Grok session
+- One prompt covering two domains "to save time"
+
+| Excuse | Reality |
+|--------|---------|
+| One-liner already in the buffer, prod is down | Nico said usegrok. Discard the buffer. Delegate. |
+| Swarm is too slow for a demo | Two domains → grok-swarm. Dead flags fail or clobber main. |
+| usegrok while already in Grok TUI | Do the work in this session. |
 
 ---
 

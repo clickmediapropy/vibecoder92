@@ -1,9 +1,11 @@
 # Grok CLI Reference
 
-> Generated from `grok -h` and subcommand help on **grok 0.2.87** (2026-07-07).
-> Run `grok update` if your version differs. For orchestration patterns, see `SKILL.md`.
+> Cache of `grok -h` and subcommand help on **grok 1.0.5** (2026-08-23).
+> `grok --help` wins if this file lags. Orchestration: `SKILL.md`. Multi-task: grok-swarm.
 
-**Grok Build** is xAI's agentic coding CLI. Default mode is an interactive TUI; use `-p` / `--single` for headless one-shot runs.
+**Grok Build** is xAI's agentic coding CLI. Default mode is an interactive TUI; use `-p` / `--single` / `--prompt-file` for headless one-shot runs.
+
+**Removed since 0.2.x (do not pass):** `--check`, `--best-of-n`. **Headless worktree:** `-p --worktree` does **not** create a worktree.
 
 ```bash
 grok -h                    # top-level help
@@ -18,14 +20,16 @@ grok <cmd> <sub> -h        # help for most subcommands (e.g. grok mcp add -h)
 | Intent | Command |
 |--------|---------|
 | Interactive session | `grok` or `grok "fix the bug"` |
-| Headless single turn | `grok -p "prompt" --always-approve` |
+| Headless single turn | `grok --prompt-file prompt.md --always-approve --cwd <repo> -m grok-4.6` |
 | Resume last session | `grok -c` |
-| Resume by ID | `grok -r <SESSION_ID>` (with `--cwd <worktree-path>` when continuing existing worktree) |
-| Resume into new worktree | `grok -w -r <SESSION_ID>` (fork; xAI docs) |
+| Resume by ID or title | `grok -r <SESSION_ID_OR_TITLE>` (`--cwd <worktree-path>` when continuing an existing worktree) |
+| Resume into new worktree | `grok -w -r <SESSION_ID>` (TUI/interactive fork; `-p` still does not create the tree) |
 | List models | `grok models` |
 | List sessions | `grok sessions list` |
-| New isolated git worktree | `grok --worktree feat-name "task"` |
+| Isolated git worktree (headless) | `dispatch-grok.sh --mode new` (grok-swarm). Do not use `grok -p --worktree`. |
 | Inspect project config | `grok inspect` |
+| Diagnostics | `grok doctor --json` |
+| Disk usage (`~/.grok`) | `grok du --json` |
 | Sign in | `grok login` |
 | Update CLI | `grok update` |
 
@@ -44,25 +48,24 @@ Starts the **Grok Build TUI** (terminal UI). An optional `[PROMPT]` seeds the fi
 | Flag | Description |
 |------|-------------|
 | `-c`, `--continue` | Continue the most recent session for the current working directory |
-| `-r`, `--resume [<SESSION_ID>]` | Resume a session by ID, or the most recent if omitted |
+| `-r`, `--resume [<SESSION_ID_OR_TITLE>]` | Resume by ID, or by title for the current directory (case-insensitive; UUID-shaped values always mean IDs). Omit value = most recent |
 | `-s`, `--session-id <UUID>` | Use a specific UUID for a **new** conversation (must not already exist). With `--resume`/`--continue`, only valid with `--fork-session` |
 | `--fork-session` | When resuming, create a new session ID instead of reusing the original |
-| `--restore-code` | Check out the original session's commit when resuming |
+| `--restore-code` | On resume, check out the original session's snapshot. Remote sessions require `--worktree` (never checks out into the current directory) |
 | `--cwd <CWD>` | Working directory |
-| `-w`, `--worktree [<NAME>]` | Start in a new git worktree, optionally named |
-| `--worktree-ref`, `--ref <REF>` | Branch, tag, or commit to base the worktree on (default: current HEAD) |
+| `-w`, `--worktree [<NAME>]` | Start in a new git worktree (TUI). **Headless (`-p`) does not create a worktree from this flag.** |
+| `--worktree-ref`, `--ref <REF>` | Branch, tag, or commit to base the worktree on (with `--worktree`; default: current HEAD) |
 
 ### Headless / scripting
 
 | Flag | Description |
 |------|-------------|
-| `-p`, `--single <PROMPT>` | Single-turn prompt; prints response to stdout and exits |
+| `-p`, `--single <PROMPT>` | Single-turn prompt; prints response to stdout and exits. Exactly one of `-p` / `--prompt-file` / `--prompt-json` |
 | `--prompt-file <PATH>` | Single-turn prompt from a file |
 | `--prompt-json <JSON>` | Single-turn prompt as JSON content blocks |
-| `--output-format <FMT>` | `plain` (default), `json`, or `streaming-json` |
+| `--output-format <FMT>` | `plain` (default), `json`, `streaming-json`, `streaming-messages-json` |
+| `--include-partial-messages` | Emit `stream_event` deltas. Only affects `streaming-messages-json` |
 | `--json-schema <SCHEMA>` | Constrain output to JSON matching schema; implies `--output-format json` |
-| `--check` | Append a self-verification loop (headless only) |
-| `--best-of-n <N>` | Run task N ways in parallel and pick the best (headless only) |
 | `--verbatim` | Send the prompt exactly as given |
 
 ### Model & reasoning
@@ -70,8 +73,7 @@ Starts the **Grok Build TUI** (terminal UI). An optional `[PROMPT]` seeds the fi
 | Flag | Description |
 |------|-------------|
 | `-m`, `--model <MODEL>` | Model ID (`grok models` to list) |
-| `--effort <LEVEL>` | `low`, `medium`, `high`, `xhigh`, `max` |
-| `--reasoning-effort <EFFORT>` | Reasoning effort for reasoning models |
+| `--effort` / `--reasoning-effort <LEVEL>` | `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max` (a model only accepts the levels it advertises) |
 | `--max-turns <N>` | Maximum agent turns |
 
 ### Agents & tools
@@ -93,9 +95,8 @@ Starts the **Grok Build TUI** (terminal UI). An optional `[PROMPT]` seeds the fi
 
 | Flag | Description |
 |------|-------------|
-| `--experimental-memory` | Enable cross-session memory |
-| `--no-memory` | Disable cross-session memory for this session |
 | `--no-plan` | Disable plan mode |
+| `grok memory …` | Manage cross-session memory files (`grok memory -h`) |
 
 ### System prompt & rules
 
@@ -245,6 +246,18 @@ grok inspect --json --cwd /path/to/repo
 
 ---
 
+### `grok doctor`
+
+Check terminal, clipboard, color, and input support without starting Grok (`--json`; `grok doctor fix` applies an automatic fix).
+
+---
+
+### `grok du` (`disk-usage`)
+
+Show what `~/.grok` uses on disk (`--json`). Lists top-level dirs, then worktrees under `worktrees/` and `worktree_pool/`. Reclaim: `grok worktree gc --max-age 7d --dry-run` (without `--max-age`, gc expires nothing).
+
+---
+
 ### `grok leader` — Manage running leader processes
 
 Shared backend that multiple Grok clients can attach to.
@@ -357,7 +370,7 @@ Clear memory files.
 | `--all` | Both workspace and global |
 | `-y`, `--yes` | Skip confirmation |
 
-Enable memory in sessions with `--experimental-memory`; disable with `--no-memory`.
+See `grok memory -h` for current flags. Top-level `--experimental-memory` / `--no-memory` are gone from 1.0.5 `grok -h`.
 
 ---
 
@@ -454,11 +467,11 @@ Permanently delete a session from history.
 ```bash
 grok sessions list -n 10
 grok sessions search "webhook"
-grok -r <ID> --cwd <worktree-path>    # resume in existing worktree (Mode C)
-grok -w -r <ID> -p "..."              # resume into a fresh worktree (Mode D fork)
+grok -r <ID> --cwd <worktree-path>    # resume in existing worktree (cwd = tree)
+grok -w -r <ID>                       # TUI fork into a fresh worktree; -p still does not create the tree
 ```
 
-**Session + worktree:** `-r`/`-c` bind to the session's original directory. When continuing an **existing** named worktree, always pass `--cwd "$WT_PATH"` with `-r`. Do not combine `-r` with `--worktree` on existing trees. `--cwd` to a worktree path alone does not reliably set shell cwd — for new tool runs, `cd` into the worktree or use `--cwd "$MAIN_REPO" --worktree name` for new work.
+**Session + worktree:** `-r`/`-c` bind to the session's original directory. When continuing an **existing** named worktree, always pass `--cwd "$WT_PATH"` with `-r`. Do not combine `-r` with `--worktree` on existing trees. Headless isolation: `dispatch-grok.sh --mode new` (pre-create `git worktree` + process cwd). `grok -p --worktree` is a no-op for tree creation.
 
 ---
 
@@ -495,7 +508,7 @@ Check for updates or install a specific version.
 ```bash
 grok update --check
 grok update
-grok update --version 0.2.87
+grok update --version 1.0.5
 ```
 
 ---
@@ -508,7 +521,7 @@ Print version information (`--json`).
 
 ### `grok worktree` — Git worktree management
 
-Grok tracks worktrees it creates (via `--worktree` flag). Distinct from raw `git worktree`.
+Grok tracks worktrees it creates (via `--worktree` in the TUI). Distinct from raw `git worktree`. Headless `-p --worktree` does **not** create a tree — use grok-swarm `dispatch-grok.sh --mode new`.
 
 #### `grok worktree list`
 
@@ -555,10 +568,10 @@ Worktree database maintenance.
 | `path` | Print DB file path |
 
 ```bash
-grok --worktree fix-bug "implement feature"
+grok --worktree fix-bug "implement feature"   # TUI; not headless
 grok worktree list
 grok worktree rm <id> -f
-grok worktree gc --dry-run
+grok worktree gc --max-age 7d --dry-run
 ```
 
 ---
@@ -593,28 +606,23 @@ grok -c -p "Fix: typecheck failed with …" \
   --always-approve
 ```
 
-### Parallel isolated tasks (Mode A — from main repo)
+### Isolated / parallel tasks
+
+`grok -p --worktree` does not create a worktree. For one isolated run or a multi-builder swarm, use grok-swarm:
 
 ```bash
-REPO=/path/to/repo
-BASE=$(git -C "$REPO" rev-parse HEAD)
-
-# NO trailing & in Cursor-style harnesses — use block_until_ms: 0 instead
-grok --prompt-file /tmp/backend.md --cwd "$REPO" --worktree wt-backend --worktree-ref "$BASE" \
-  -m grok-4.6 --always-approve --output-format streaming-json > /tmp/backend.log 2>&1
-
-grok --prompt-file /tmp/frontend.md --cwd "$REPO" --worktree wt-frontend --worktree-ref "$BASE" \
-  -m grok-4.6 --always-approve --output-format streaming-json > /tmp/frontend.log 2>&1
-
-grok worktree list
+${CLAUDE_PLUGIN_ROOT}/skills/grok-swarm/bin/dispatch-grok.sh --mode new \
+  --repo "$REPO" --worktree wt-backend --base "$BASE" \
+  --agent "Builder 1" --prompt-file /tmp/backend.md --log /tmp/backend.log
 ```
 
-See also: `${CLAUDE_PLUGIN_ROOT}/skills/grok-swarm/bin/dispatch-grok.sh --mode new ...`
+See `/grok-swarm`. Do not launch parallel `grok -p` writers on the same checkout.
 
 ### Read-only audit
 
 ```bash
 grok -p "Audit only. Do NOT edit files." \
+  --permission-mode plan \
   --disallowed-tools "search_replace,write" \
   --always-approve
 ```

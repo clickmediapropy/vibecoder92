@@ -1,7 +1,16 @@
 {
   "name": "grok-swarm",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Run autonomous multi-agent coding swarms on Grok CLI from Claude Code: parallel builders in isolated git worktrees, detached coordinator, dashboard, verify/fix/merge loop. Bundles the grok-swarm, usegrok and double-check skills.",
-  "author": { "name": "Nico Delgado", "email": "famigliadelgadobreuer@gmail.com" },
-  "keywords": ["grok", "swarm", "multi-agent", "worktrees", "orchestration"]
+  "author": {
+    "name": "Nico Delgado",
+    "email": "famigliadelgadobreuer@gmail.com"
+  },
+  "keywords": [
+    "grok",
+    "swarm",
+    "multi-agent",
+    "worktrees",
+    "orchestration"
+  ]
 }
