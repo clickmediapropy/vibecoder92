@@ -1,0 +1,199 @@
+/* ============================================================
+   Swarm Mission Control - fx.css
+   Progressive enhancement only. Every block is @supports-gated.
+   core.css renders correctly without any of this.
+   ============================================================ */
+
+/* ---------- Keyword-size interpolation (auto-height transitions) ---------- */
+@supports (interpolate-size: allow-keywords) {
+  :root { interpolate-size: allow-keywords; }
+}
+@supports (height: calc-size(auto, size)) {
+  .col-body, .tp-list, #resume-list {
+    transition: height 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+}
+
+/* ---------- View transitions: cards glide between columns ---------- */
+@supports (view-transition-name: none) {
+  ::view-transition-group(*) {
+    animation-duration: 0.42s;
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  /* Root crossfade made every VT feel like a full-page blink. Keep root static;
+     named groups (cards) still glide via ::view-transition-group(*). */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+  }
+}
+
+/* ---------- Anchor positioning for popovers ---------- */
+@supports (position-anchor: --a) and (top: anchor(bottom)) {
+  .task-pop#task-pop {
+    position-anchor: --task-current;
+    left: anchor(left);
+    top: calc(anchor(bottom) + 6px);
+    bottom: auto;
+    transform: none;
+    position-try-fallbacks: flip-block, flip-inline;
+    position-visibility: anchors-visible;
+  }
+  .task-pop#run-pop {
+    position-anchor: --run-current;
+    left: anchor(left);
+    top: calc(anchor(bottom) + 6px);
+    bottom: auto;
+    transform: none;
+    position-try-fallbacks: flip-block, flip-inline;
+    position-visibility: anchors-visible;
+  }
+}
+
+/* ---------- Scroll-state: topbar compresses when stuck ---------- */
+@supports (container-type: scroll-state) {
+  .topbar {
+    container-type: scroll-state;
+    container-name: topbar;
+  }
+  .topbar .sub {
+    max-height: 20px;
+    transition: max-height 0.25s ease, opacity 0.2s ease;
+  }
+  .topbar .mark {
+    transition: width 0.25s ease, height 0.25s ease, transform 0.25s ease;
+  }
+  .topbar .brand-name {
+    transition: font-size 0.25s ease;
+  }
+  @container topbar scroll-state(stuck: top) {
+    .sub { max-height: 0; opacity: 0; }
+    .mark { transform: scale(0.84); }
+    .brand-name { font-size: 13px; }
+  }
+}
+
+/* ---------- Cap-precise typography ---------- */
+@supports (text-box-trim: trim-both) and (text-box-edge: cap alphabetic) {
+  .brand-name, .stat b, .eta-ring b, .mission-count, .tp-title {
+    text-box-trim: trim-both;
+    text-box-edge: cap alphabetic;
+  }
+}
+
+/* ---------- Spring easing on real-data bars ---------- */
+@supports (transition-timing-function: linear(0, 1)) {
+  .bar-inner, .mem-bar-inner, .pn-fill {
+    transition-timing-function: linear(
+      0, 0.35 12%, 0.72 24%, 0.95 38%, 1.045 52%, 0.99 68%, 1.005 84%, 1
+    );
+    transition-duration: 0.7s;
+  }
+}
+
+/* ---------- Stat value tick (fires only on a real value delta) ---------- */
+@supports (font-variation-settings: "wght" 700) {
+  @keyframes stat-tick {
+    0%   { font-variation-settings: "wght" 600; transform: translateY(0); }
+    35%  { font-variation-settings: "wght" 800; transform: translateY(-1px); }
+    100% { font-variation-settings: "wght" 600; transform: translateY(0); }
+  }
+  .stat.tick b { animation: stat-tick 0.55s ease; }
+}
+
+/* ---------- Status transition choreography ---------- */
+@supports (color: color-mix(in oklch, red, blue)) {
+  @keyframes flash-done {
+    0%   { box-shadow: 0 0 0 0 color-mix(in oklch, var(--green) 62%, transparent); }
+    100% { box-shadow: 0 0 0 14px transparent; }
+  }
+  @keyframes flash-blocked {
+    0%   { box-shadow: 0 0 0 0 color-mix(in oklch, var(--red) 58%, transparent); transform: translateX(0); }
+    12%  { transform: translateX(-3px); }
+    28%  { transform: translateX(3px); }
+    44%  { transform: translateX(-2px); }
+    100% { box-shadow: 0 0 0 12px transparent; transform: translateX(0); }
+  }
+  .card.just-done    { animation: flash-done 1.1s ease-out 2; }
+  .card.just-blocked { animation: flash-blocked 0.9s ease-out 2; }
+  .card.flash-target { animation: flash-done 0.9s ease-out 1; }
+}
+
+/* ---------- Fresh log lines ---------- */
+@supports (animation-name: none) {
+  @keyframes line-in {
+    from { opacity: 0; transform: translateY(2px); }
+    to   { opacity: 1; transform: none; }
+  }
+  .log-line.line-in { animation: line-in 0.4s ease-out both; }
+}
+
+/* ---------- Activity items arc in along a motion path ---------- */
+@supports (offset-path: path("M 0 0 L 1 1")) {
+  @keyframes act-in {
+    from { offset-distance: 0%; opacity: 0; }
+    to   { offset-distance: 100%; opacity: 1; }
+  }
+  .act-item.is-new {
+    offset-path: path("M -34 16 Q -13 -8 0 0");
+    offset-rotate: 0deg;
+    animation: act-in 0.65s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+}
+
+/* ---------- Popover entrance ---------- */
+@supports selector(:popover-open) {
+  @keyframes pop-in {
+    from { opacity: 0; transform: translateY(4px) scale(0.985); }
+    to   { opacity: 1; transform: none; }
+  }
+  .task-pop:popover-open { animation: pop-in 0.18s ease-out; }
+}
+
+/* ---------- Entrance for panels that appear mid-session ---------- */
+@supports at-rule(@starting-style) {
+  .panel, .col, .run-card, .pack-node {
+    transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    opacity: 1;
+    transform: none;
+  }
+  @starting-style {
+    .panel, .col, .run-card, .pack-node {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+}
+
+/* ---------- Polish: micro-interactions (gated) ---------- */
+@supports (animation-timeline: view()) {
+  .card, .run-card { animation-timeline: view(); }
+}
+@supports (filter: blur(0)) {
+  .panel:hover { filter: saturate(1.06); }
+  .card:hover { filter: saturate(1.08); }
+}
+
+/* ---------- Reduced motion: mirror the core kill switch ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .stat.tick b,
+  .card.just-done,
+  .card.just-blocked,
+  .card.flash-target,
+  .log-line.line-in,
+  .act-item.is-new,
+  .task-pop:popover-open,
+  .panel, .col, .run-card, .pack-node {
+    animation: none !important;
+    transition: none !important;
+    offset-path: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+}

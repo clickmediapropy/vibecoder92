@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "grok-swarm-mega-plan",
+  "title": "grok-swarm mega plan",
+  "type": "object",
+  "required": ["id", "goal", "subswarms"],
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,47}$",
+      "description": "Mega mission id (slug)"
+    },
+    "goal": { "type": "string", "minLength": 1 },
+    "base_ref": { "type": "string" },
+    "integrate_branch": { "type": "string" },
+    "default_branch": { "type": "string" },
+    "repo": { "type": "string" },
+    "capacity": {
+      "type": "object",
+      "description": "Per-mega ceiling (min'd with host-capacity.json). Defaults are high (10/30/15/10) — not a hard 4-coord law. Parallel megas share host free slots.",
+      "properties": {
+        "max_builders": { "type": "integer", "minimum": 1 },
+        "max_coordinators": { "type": "integer", "minimum": 1 },
+        "max_reviewers": { "type": "integer", "minimum": 0 },
+        "max_scouts": { "type": "integer", "minimum": 0 },
+        "max_loggers": { "type": "integer", "minimum": 0, "description": "Compounding learnings agents after merge" },
+        "max_visual_reviewers": { "type": "integer", "minimum": 0 },
+        "max_dev_servers": { "type": "integer", "minimum": 0 },
+        "ram_reserve_gb": { "type": "number", "minimum": 0 }
+      }
+    },
+    "worktree_seed": {
+      "type": "object",
+      "properties": {
+        "copy_from_main": { "type": "array", "items": { "type": "string" } },
+        "required": { "type": "array", "items": { "type": "string" } },
+        "copy_if_exists": { "type": "boolean" }
+      }
+    },
+    "subswarms": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "files"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,47}$"
+          },
+          "title": { "type": "string" },
+          "files": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" }
+          },
+          "builders": { "type": "integer", "minimum": 1, "maximum": 30 },
+          "scouts": { "type": "integer", "minimum": 0, "maximum": 10, "description": "Read-only scout agents before build (default 1)" },
+          "loggers": { "type": "integer", "minimum": 0, "maximum": 4, "description": "Logger agents after merge (default 1) — write docs/solutions learnings" },
+          "reviewer": { "type": "boolean" },
+          "visual_review": { "type": "boolean" },
+          "visual_tier": {
+            "type": "string",
+            "enum": ["full", "smoke", "gates_only"],
+            "description": "full = agent-browser owned routes; smoke = 2-4 routes; gates_only = code gates + DC only (integrate visual later)"
+          },
+          "depends_on": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "acceptance": { "type": "string" },
+          "agents": { "type": "string" }
+        }
+      }
+    }
+  }
+}

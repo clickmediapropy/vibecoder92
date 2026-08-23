@@ -1,0 +1,13 @@
+{
+  "name": "vibecoder92",
+  "description": "Nico Delgado's shared Claude Code plugins and skills",
+  "owner": { "name": "Nico Delgado", "email": "famigliadelgadobreuer@gmail.com" },
+  "plugins": [
+    {
+      "name": "grok-swarm",
+      "description": "Autonomous multi-agent coding swarms on Grok CLI: parallel worktree builders, detached coordinator, dashboard, verify/fix/merge.",
+      "category": "development",
+      "source": "./plugins/grok-swarm"
+    }
+  ]
+}

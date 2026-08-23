@@ -1,0 +1,14 @@
+{
+  "_comment": "Canonical host ceilings for grok-swarm \u2014 single source of truth. Values copied from bin/capacity.cjs HOST_DEFAULT_CAPACITY. Edit capacity.cjs defaults when this changes; both files must stay in sync. Also reflected in SKILL.md and reference.md capacity tables.",
+  "max_coordinators": 16,
+  "max_builders": 30,
+  "max_reviewers": 15,
+  "max_scouts": 10,
+  "max_loggers": 6,
+  "max_visual_reviewers": 8,
+  "max_dev_servers": 10,
+  "max_heavy_tools": 3,
+  "ram_reserve_gb": 4,
+  "min_free_ram_gb": 2,
+  "auto_pause_low_memory": 0
+}

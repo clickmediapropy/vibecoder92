@@ -1,0 +1,13 @@
+#!/bin/sh
+# grok-swarm CLI wrapper -> node swarm.cjs (symlink-safe for ~/.local/bin)
+SOURCE="$0"
+while [ -h "$SOURCE" ]; do
+  DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  case "$SOURCE" in
+    /*) ;;
+    *) SOURCE="$DIR/$SOURCE" ;;
+  esac
+done
+SCRIPT_DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+exec node "$SCRIPT_DIR/swarm.cjs" "$@"

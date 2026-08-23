@@ -1,0 +1,45 @@
+{
+  "type": "object",
+  "required": ["taskId", "summary", "filesChanged", "verification", "status", "doubleCheck"],
+  "properties": {
+    "taskId": {
+      "type": "string",
+      "description": "The swarm task id this run implemented (given in the prompt)."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["done", "blocked"],
+      "description": "done = acceptance + gates + /double-check complete; blocked = could not finish."
+    },
+    "summary": {
+      "type": "string",
+      "description": "2-4 sentence summary of what was built/changed and why."
+    },
+    "filesChanged": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Repo-relative paths of every file created, edited, or deleted."
+    },
+    "verification": {
+      "type": "string",
+      "description": "Exact commands run to self-verify (lint/typecheck/tests) and their outcomes."
+    },
+    "doubleCheck": {
+      "type": "string",
+      "enum": ["complete", "incomplete", "partially complete"],
+      "description": "Result of the mandatory /double-check skill pass. status=done MUST be complete; incomplete/partial → use status=blocked."
+    },
+    "doubleCheckPath": {
+      "type": "string",
+      "description": "Path to double-check report markdown (e.g. .grok-swarm/double-check/<taskId>.md)."
+    },
+    "blockedReason": {
+      "type": "string",
+      "description": "Required when status=blocked: what is blocking and what the coordinator should do."
+    },
+    "outOfScopeNotes": {
+      "type": "string",
+      "description": "Anything noticed outside the owned file set that the coordinator should know (do NOT fix it yourself)."
+    }
+  }
+}

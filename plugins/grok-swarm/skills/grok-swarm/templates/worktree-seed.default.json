@@ -1,0 +1,10 @@
+{
+  "copy_from_main": [
+    ".env.local",
+    ".env",
+    "playwright/.auth/user.json"
+  ],
+  "required": [],
+  "copy_if_exists": true,
+  "never_commit": true
+}
