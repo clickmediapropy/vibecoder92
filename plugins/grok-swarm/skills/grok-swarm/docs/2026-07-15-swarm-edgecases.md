@@ -40,7 +40,7 @@ Force-pass only: auth/harness BLOCKED (or aged non-product BLOCKED) **and** gate
 | F1 | merge/force-pass without DC complete | **no** | require `.grok-swarm/double-check/<taskId>.md` with `Double-check result: complete` |
 | F2 | missing double-check file on MAIN | **no** | refuse mark done; copy DC report to MAIN path |
 | F3 | main tests fail; `pip show` → worktree path | **no** (stack-specific) | reinstall editable on MAIN; `PYTHONPATH=$WT/src` for wt gates |
-| F4 | `vp fmt`/`vp staged`/vite.config import **SIGBUS** (exit 135); oxfmt direct still works | **yes** if repo has `npm run verify:native:fix` | truncated optional native (often `lightningcss-*.node` with `missing section headers`); hardlinked across worktrees. Detect: `npm run verify:native` or `file node_modules/lightningcss-linux-x64-gnu/*.node`. Fix: `npm run verify:native:fix` or reinstall package from registry — never copy `.node` between worktrees. Agentify: `docs/solutions/2026-07-18-vp-sigbus-corrupt-lightningcss-native.md` |
+| F4 | `vp fmt`/`vp staged`/vite.config import **SIGBUS** (exit 135); oxfmt direct still works | **yes** if repo has `npm run verify:native:fix` | truncated optional native (often `lightningcss-*.node` with `missing section headers`); hardlinked across worktrees. Detect: `npm run verify:native` or `file node_modules/lightningcss-linux-x64-gnu/*.node`. Fix: `npm run verify:native:fix` or reinstall package from registry — never copy `.node` between worktrees. |
 
 ## Quick detect recipes
 

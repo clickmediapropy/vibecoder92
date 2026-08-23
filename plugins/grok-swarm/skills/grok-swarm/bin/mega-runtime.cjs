@@ -629,7 +629,7 @@ function runFloorTick(ctx, repo, megaId, subName, sub, plan, opts) {
 /**
  * Paths where both sides of a conflict are almost always append-only indexes /
  * learnings. Safe to retry with `git merge -X union` (B3 auto path).
- * Matches agentify `docs/solutions/INDEX.md` and local `.grok-swarm/learnings/**`.
+ * Matches `docs/solutions/INDEX.md` and local `.grok-swarm/learnings/**`.
  */
 const UNION_MERGE_SAFE_PATTERNS = [
   /(^|\/)docs\/solutions\/INDEX\.md$/i,

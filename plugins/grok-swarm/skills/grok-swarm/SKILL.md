@@ -5,8 +5,6 @@ description: "Use when running a multi-agent coding swarm with Grok CLI builders
 
 # grok-swarm — Run a multi-agent coding swarm on Grok CLI
 
-**Plugin layout:** this skill ships inside the `grok-swarm` Claude Code plugin. `swarm` = `${CLAUDE_PLUGIN_ROOT}/skills/grok-swarm/bin/swarm`; sibling skills at `${CLAUDE_PLUGIN_ROOT}/skills/usegrok/` and `${CLAUDE_PLUGIN_ROOT}/skills/double-check/`. Prefix `export PATH="${CLAUDE_PLUGIN_ROOT}/skills/grok-swarm/bin:$PATH"` before any `swarm ...` command below.
-
 
 **Repo-agnostic** parallel builds via **Grok CLI workers** (`grok -p` + isolated worktrees), shared board, file mail, event-sourced tasks, dispatch tracking, verify+fix loop, and merge. No assumed language/framework — stack and gates come from the target checkout. Zero third-party deps — only `grok` and Node.
 
@@ -223,7 +221,7 @@ node <skill>/bin/gate.cjs -- npm run typecheck    # blocks until a slot frees; r
 
 Ceiling: `max_heavy_tools` in host capacity (default **3**; `swarm capacity set --max-heavy-tools N`). Slots live in `<nearest .grok-swarm walking up from cwd>/gate-slots/` — for worktree builders that is usually NOT the target repo's workspace but whatever `.grok-swarm/` exists above `~/.grok/worktrees/` (e.g. a stray `~/.grok-swarm/` from a past home-dir run); only when none exists on the whole ancestor path does it fall back to `/tmp/grok-gate-slots`. Same resolution picks the capacity file, so a repo's `max_heavy_tools` override does not reach worktree builders — they use the default 3 unless you pass `--max`/`--slots-dir` explicitly. Stale and poisoned slot files are reclaimed. Advisory like file leases — `templates/builder-prompt.md` instructs builders to route every heavy gate through it; the coordinator should run post-merge gates through it too.
 
-**Leader mode: rejected 2026-08-13.** `grok agent leader` + `--leader` clients multiplex sessions correctly, but grok 1.0.3 clients are full-weight processes — 8 leader-attached workers cost 743.6 MB vs 521.3 MB standalone (0.70×, criterion ≥2× lower). No leader wiring exists in this skill; fat `grok -p` workers + this governor are the shipped topology. Full S0–S4 numbers and revisit conditions: `docs/superpowers/specs/2026-08-13-grok-swarm-leader-ram-design.md` §Spike results (repo agent-standard).
+**Leader mode: rejected 2026-08-13.** `grok agent leader` + `--leader` clients multiplex sessions correctly, but grok 1.0.3 clients are full-weight processes — 8 leader-attached workers cost 743.6 MB vs 521.3 MB standalone (0.70×, criterion ≥2× lower). No leader wiring exists in this skill; fat `grok -p` workers + this governor are the shipped topology. Full S0–S4 numbers and revisit conditions: the leader-mode spike notes §Spike results.
 
 ## Failure modes → recovery (high-traffic subset)
 

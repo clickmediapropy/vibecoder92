@@ -66,7 +66,7 @@ If the task genuinely requires touching a file outside this set, STOP and escala
 
 
 
-## Typecheck under parallel swarm load (Agentify / large monorepos)
+## Typecheck under parallel swarm load (large monorepos)
 
 When many builders run at once, **do not** fire unbounded `npm run typecheck` / `tsc --noEmit` in every worktree — each full program can cost ~1GB RSS and will OOM the host.
 
@@ -86,7 +86,7 @@ Prefer, in order:
 2. **`npm run typecheck:offline`** (no codegen) if `typecheck:swarm` missing
 3. Full **`npm run typecheck`** only when isolated or when the slot wrapper is unavailable
 
-If `vp fmt` / `vp staged` / loading `vite.config` dies with **Bus error (SIGBUS, exit 135)** while direct `oxfmt` still works: **edge F4** — truncated optional native (often `lightningcss*.node`). On Agentify: `npm run verify:native:fix` on MAIN (and re-check worktree). Do not claim gates green by only running bare oxfmt.
+If `vp fmt` / `vp staged` / loading `vite.config` dies with **Bus error (SIGBUS, exit 135)** while direct `oxfmt` still works: **edge F4** — truncated optional native (often `lightningcss*.node`). Run `npm run verify:native:fix` on MAIN (and re-check worktree). Do not claim gates green by only running bare oxfmt.
 
 For packs that only touch `convex/**`, you may additionally run `npx tsc --noEmit -p convex/tsconfig.json` as a fast scoped gate, then still run `typecheck:swarm` once before done.
 

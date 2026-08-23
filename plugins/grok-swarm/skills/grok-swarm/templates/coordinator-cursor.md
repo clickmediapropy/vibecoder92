@@ -40,14 +40,14 @@ Resume: `swarm resume` (if paused) then `swarm coordinator start --resume --daem
 Only if the user asks you to drive the loop or `swarm coordinator status` is dead:
 
 ```bash
-{{SKILL_ROOT}}/bin/coordinator-guard.sh --repo "$REPO" --expect-clean
-{{SKILL_ROOT}}/bin/dispatch-grok.sh --mode new \
+${CLAUDE_PLUGIN_ROOT}/skills/grok-swarm/bin/coordinator-guard.sh --repo "$REPO" --expect-clean
+${CLAUDE_PLUGIN_ROOT}/skills/grok-swarm/bin/dispatch-grok.sh --mode new \
   --repo "$REPO" --worktree wt-<slug> --base "$(git -C "$REPO" rev-parse HEAD)" \
   # Mode A: wrapper pre-creates git worktree + cwd isolation — never raw grok --worktree
   --agent "Builder 1" --prompt-file /tmp/grok-swarm-<slug>.md \
   --log /tmp/grok-swarm-<slug>.log
 ```
 
-Full rules: `{{SKILL_ROOT}}/SKILL.md`.
+Full rules: `${CLAUDE_PLUGIN_ROOT}/skills/grok-swarm/SKILL.md`.
 
 **Double-check:** every builder must run `/double-check` (`{{SKILL_ROOT}}/../double-check/SKILL.md`) and leave `.grok-swarm/double-check/<taskId>.md` with result **complete** before merge. Coordinators enforce this; parents in Mode B must too.

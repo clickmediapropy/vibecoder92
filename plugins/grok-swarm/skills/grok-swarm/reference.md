@@ -205,7 +205,7 @@ Adds/updates entries in `agents.json` after init — keeps `@all` broadcasts wor
 swarm learnings path [--repo PATH] [--json]
 swarm learnings list [--repo PATH] [--swarm ID] [--mega ID] [--json]
 ```
-Preferred root: `docs/solutions/` if present (Agentify CE style), else `docs/learnings/`, else `.grok-swarm/learnings/`. Logger also writes `.grok-swarm/learnings/by-swarm/<id>/SUMMARY.md`.
+Preferred root: `docs/solutions/` if present (compound-engineering style), else `docs/learnings/`, else `.grok-swarm/learnings/`. Logger also writes `.grok-swarm/learnings/by-swarm/<id>/SUMMARY.md`.
 
 ### capacity (host-shared across parallel megas)
 ```bash
@@ -238,7 +238,7 @@ Slot semaphore for heavy gate subprocesses (`tsc`, `vitest`, `npm install`, buil
 | S3 client `kill -9` mid-tool | leader **keeps executing** → any future wiring needs `leader_pause_mode: "leader"` |
 | S4 `--tools read_file,grep,list_dir` via leader | pass (write blocked) |
 
-Decision matrix row **S1 fail → no leader wiring**: fat `grok -p` workers + the gate semaphore + capacity ceilings are the shipped topology. Revisit only if a future Grok CLI ships thin leader clients. Full record: `docs/superpowers/specs/2026-08-13-grok-swarm-leader-ram-design.md` (repo agent-standard).
+Decision matrix row **S1 fail → no leader wiring**: fat `grok -p` workers + the gate semaphore + capacity ceilings are the shipped topology. Revisit only if a future Grok CLI ships thin leader clients. Full record: the leader-mode spike notes.
 
 ### board / state
 ```bash
@@ -306,7 +306,7 @@ Capacity defaults (host-shared, micro-pack): max_coordinators **16**, max_builde
 
 **Visual reviewer:** `templates/visual-reviewer-prompt.md` + agent-browser; findings redispatch builders. Subswarms may set `visual_tier` (`full` / `smoke` / `gates_only`) so pack visual depth matches surface area.
 
-**Mandatory /double-check:** builders and visual reviewers follow `<skill-root>/../double-check/SKILL.md`. Builders write `.grok-swarm/double-check/<taskId>.md` with `Double-check result: complete` before `worker_done`. `worker-done.schema.json` requires `doubleCheck`. Coordinators refuse merge without it (redispatch). Protocol template: `templates/double-check-protocol.md`.
+**Mandatory /double-check:** builders and visual reviewers follow `{{SKILL_ROOT}}/../double-check/SKILL.md`. Builders write `.grok-swarm/double-check/<taskId>.md` with `Double-check result: complete` before `worker_done`. `worker-done.schema.json` requires `doubleCheck`. Coordinators refuse merge without it (redispatch). Protocol template: `templates/double-check-protocol.md`.
 
 ### launch (plan-then-exit entrypoint)
 ```bash

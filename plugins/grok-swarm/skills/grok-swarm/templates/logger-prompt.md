@@ -39,7 +39,7 @@ You do **not** implement product features. You **extract durable knowledge** fro
 
 Resolve **LEARNINGS_ROOT** in order:
 
-1. If `docs/solutions/` exists → use it (Agentify / CE style).
+1. If `docs/solutions/` exists → use it (compound-engineering style).
    - File: `docs/solutions/YYYY-MM-DD-<slug>.md`
    - Index: append **one line** to `docs/solutions/INDEX.md` (create if missing with a short header).
 2. Else if `docs/learnings/` exists → `docs/learnings/swarm/YYYY-MM-DD-<slug>.md` + `docs/learnings/INDEX.md` or `docs/learnings/swarm/INDEX.md`.
