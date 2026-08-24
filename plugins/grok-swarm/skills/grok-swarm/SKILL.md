@@ -14,13 +14,13 @@ Read **`/usegrok`** (`${CLAUDE_PLUGIN_ROOT}/skills/usegrok/SKILL.md`) for the ca
 
 > **Multi-task swarms use grok-swarm, not parallel `/usegrok` sessions.** Single change → `/usegrok` alone.
 
-> Verified against **Grok CLI v1.0.3** (`grok --version`; skill last audited **2026-08-12**). Workers use Mode A via `dispatch-grok.sh` (pre-create git worktree + cwd; **no** `grok --worktree` on launch). Model: **`grok-4.6`** (CLI default; `grok-4.5` still listed). Coordinator + heal + dead-PID auto-reconcile unchanged. Latest stable is **1.0.3** (`grok update --check --json` shows `updateAvailable: false`).
+> Verified against **Grok CLI v1.0.5** (`grok --version`; skill last audited **2026-08-24**). Workers use Mode A via `dispatch-grok.sh` (pre-create git worktree + cwd; **no** `grok --worktree` on launch). Model: **`grok-4.6`** (CLI default; `grok-4.5` still listed). Coordinator + heal + dead-PID auto-reconcile unchanged. Latest stable is **1.0.5** (`grok update --check --json` shows `"currentVersion":"1.0.5","latestVersion":"1.0.5","updateAvailable":false`).
 
 Full flag tables, CLI details, and mega/heal deep dives live in [`reference.md`](reference.md) — this file is the lean operator entrypoint.
 
 ## Role dispatch flags — summary (source: reference.md §Role dispatch flags)
 
-`dispatch-grok.sh` applies role-aware argv from `--agent` (case-insensitive substring). **No worker passes `--check` or `--best-of-n`** (both still rejected on 1.0.3; verified `grok -p "test" --check` → `unexpected argument`).
+`dispatch-grok.sh` applies role-aware argv from `--agent` (case-insensitive substring). **No worker passes `--check` or `--best-of-n`** (both still rejected on 1.0.5; not in `grok --help`).
 
 | Role (agent label) | max-turns | no-subagents | disallowed-tools | sandbox when `GROK_SWARM_SANDBOX≠off` | disable-web | json-schema |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -44,7 +44,7 @@ Optional env vars:
 | `GROK_SWARM_WORKTREE_GC` | `1` | `0` skips `grok worktree gc` on mega cleanup (soft-fails with warning when `1`; set `0` to silence) |
 | `GROK_SWARM_WORKTREE_GC_MAX_AGE` | `7d` | Passed as `grok worktree gc --max-age`. Without `--max-age` the CLI expires nothing |
 
-**CLI 1.0.3 contract (adopted):** headless `-p` **does not create a worktree** from `--worktree` — Mode A stays `dispatch-grok.sh` (git worktree + process cwd). `-r` matches session **ID or title** (UUID-shaped values always mean IDs; prefer recorded sessionId). Pre-flight adds `grok doctor --json` and `grok du --json`. Cleanup uses `grok worktree gc --max-age 7d`. TUI-only: `--fullscreen` / `--minimal`. Full delta: reference.md §New in 1.0.3.
+**CLI 1.0.5 contract (adopted):** headless `-p` **does not create a worktree** from `--worktree` (`grok --help`) — Mode A stays `dispatch-grok.sh` (git worktree + process cwd). `-r` matches session **ID or title** (UUID-shaped values always mean IDs; prefer recorded sessionId). Pre-flight adds `grok doctor --json` and `grok du --json`. Cleanup uses `grok worktree gc --max-age 7d`. TUI-only: `--fullscreen` / `--minimal`. Do **not** pass `--no-memory` (gone from 1.0.5 `grok --help`).
 
 ## Autonomous mode (default) — parent launch-and-exit
 
@@ -81,10 +81,10 @@ Manual parent-as-coordinator: debug only — see reference.md §Role split Mode 
 Full tables: `reference.md` §Grok CLI headless commands. Highlights:
 
 - **Prompt source:** exactly one of `-p` / `--prompt-file` (preferred) / `--prompt-json`. Never combine `-p` + `--prompt-file`.
-- **Mandatory on every `grok` run:** `--always-approve`, `--cwd`, `-m grok-4.6`; workers add `--no-memory` (isolation). Resume with same `-m`; on `MODEL_SWITCH_INCOMPATIBLE_AGENT` redispatch Mode B.
+- **Mandatory on every `grok` run:** `--always-approve`, `--cwd`, `-m grok-4.6`. Do not pass `--no-memory` (removed in 1.0.5). Resume with same `-m`; on `MODEL_SWITCH_INCOMPATIBLE_AGENT` redispatch Mode B.
 - **Output:** `plain` / `json` (+ `--json-schema worker-done.schema.json`) / `streaming-json` (preferred) / `streaming-messages-json` (needs `--include-partial-messages`).
 - **Sessions:** `-c` / `-r <ID-or-title>` / `-s <UUID>` / `--fork-session` / `--restore-code` (remote D only). Mode C: always `--cwd "$WT_PATH"` + `-r`/`-c` with same `-m`; never `-c/-r/-s` + `--worktree` on existing `wt-*` (silently edits MAIN). Mode D `grok -w -r <ID>` only for intentional fork to fresh worktree.
-- **Worktrees:** 1.0.3: `grok -p --worktree` does **not** create a tree. Always `dispatch-grok.sh --mode new` (pre-create `git worktree` + cwd). Manage leftovers with `grok worktree list|rm` and `grok worktree gc --max-age 7d`.
+- **Worktrees:** 1.0.5: `grok -p --worktree` does **not** create a tree. Always `dispatch-grok.sh --mode new` (pre-create `git worktree` + cwd). Manage leftovers with `grok worktree list|rm` and `grok worktree gc --max-age 7d`.
 - **Read-only review:** `--permission-mode plan` + `--disallowed-tools "search_replace,write"` (+ `--tools "read_file,grep,list_dir"` tightening); verify `git status` unchanged.
 - **Pre-flight:** `grok --version && grok models && (cd "$REPO" && grok inspect --json) && grok update --check --json && grok doctor --json && grok du --json`
 
@@ -165,7 +165,7 @@ Identity required on every call — always `export SWARM_AGENT_NAME=Coordinator`
 
 ## Parent phase checklist (autonomous)
 
-- [ ] Pre-flight: `grok --version` (≥1.0.3), `grok models` (default `grok-4.6`), `swarm init --fresh`, agents registered
+- [ ] Pre-flight: `grok --version` (≥1.0.5), `grok models` (default `grok-4.6`), `swarm init --fresh`, agents registered
 - [ ] Plan: `swarm task create` disjoint; `swarm check` passes
 - [ ] Launch: `swarm launch "$REPO"` (or dashboard + `coordinator start --daemon`)
 - [ ] Verify: `swarm dashboard status` + `swarm coordinator status`

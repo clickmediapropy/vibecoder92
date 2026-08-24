@@ -45,7 +45,7 @@ Spend telemetry: `log-analyze.cjs` parses streaming-json `end` events (`sessionI
 | `--fullscreen` / `--minimal` | TUI screen mode | Ignore in swarm (headless) |
 | `--check` / `--best-of-n` | Still absent | Keep the never-pass rule (verified 1.0.3) |
 
-1.0.0 items already adopted (unchanged): `--tools` allowlist for scouts/reviewers, `--sandbox` opt-in, workers `--no-memory`, `grok inspect --json`, `grok trace`/`export` on failed sessionId, `streaming-json` (not `streaming-messages-json`).
+1.0.0 items already adopted (unchanged): `--tools` allowlist for scouts/reviewers, `--sandbox` opt-in, `grok inspect --json`, `grok trace`/`export` on failed sessionId, `streaming-json` (not `streaming-messages-json`). Do not pass `--no-memory` (removed in 1.0.5).
 
 Official headless docs: [xAI Headless & Scripting](https://docs.x.ai/build/cli/headless-scripting). Headless sessions live in `~/.grok/sessions`.
 
@@ -481,15 +481,15 @@ grok worktree gc --max-age 7d --dry-run   # then drop --dry-run; without --max-a
 
 **Prompt source (pick one):** `-p "..."` OR `--prompt-file <path>` (preferred) OR `--prompt-json`. Never `-p` + `--prompt-file`.
 
-**Mandatory on every swarm `grok` run:** `--always-approve`, correct `--cwd`, and role model (`grok-4.6` coordinator / `grok-4.6` workers). Workers also pass `--no-memory` for isolation (coordinator keeps default cross-session memory).
+**Mandatory on every swarm `grok` run:** `--always-approve`, correct `--cwd`, and role model (`grok-4.6` coordinator / `grok-4.6` workers). Do not pass `--no-memory` (gone from 1.0.5 `grok --help`).
 
 **Output:** `--output-format plain|json|streaming-json|streaming-messages-json` (swarm uses `streaming-json` ACP updates for live monitor; `streaming-messages-json` needs `--include-partial-messages` for deltas); `--json-schema` for validated worker_done (via `GROK_SWARM_WORKER_JSON_SCHEMA_MODE=replace`).
 
-**Sessions:** `-c` continue, `-r <id-or-title>` resume (UUID-shaped → ID; else title match in cwd), `-s <uuid>` new named session; list via `grok sessions list -n 10`. Mode C fix loop: `--prompt-file` + `--cwd <worktree-path> -r <id> --fork-session --max-turns --no-memory` — never `-r` without `--cwd` on existing trees. Mode D fork: `grok -w -r <id>` (new worktree only; `-p` still does not create the tree); remote D adds `--restore-code` to restore snapshot codebase (local stays conversation-only).
+**Sessions:** `-c` continue, `-r <id-or-title>` resume (UUID-shaped → ID; else title match in cwd), `-s <uuid>` new named session; list via `grok sessions list -n 10`. Mode C fix loop: `--prompt-file` + `--cwd <worktree-path> -r <id> --fork-session --max-turns` — never `-r` without `--cwd` on existing trees. Mode D fork: `grok -w -r <id>` (new worktree only; `-p` still does not create the tree); remote D adds `--restore-code` to restore snapshot codebase (local stays conversation-only).
 
 **Worktrees:** Mode A uses git worktree + process cwd. **Do not** pass `grok --worktree` on headless launch (1.0.3: `-p` does not create a worktree from that flag). Manage via `git worktree` + `swarm cleanup`; `grok worktree list|show|rm` for registry-tracked trees; `grok worktree gc --max-age 7d` (without `--max-age`, gc expires nothing). Disk: `grok du --json`.
 
-**Read-only roles:** `dispatch-grok.sh` passes `--tools "read_file,grep,list_dir"` (strict) or `--disallowed-tools search_replace` + `--no-memory`. Optional `--permission-mode plan` for reviewers.
+**Read-only roles:** `dispatch-grok.sh` passes `--tools "read_file,grep,list_dir"` (strict) or `--disallowed-tools search_replace`. Optional `--permission-mode plan` for reviewers.
 
 **Tuning:** `--effort` (alias `--reasoning-effort`), `--max-turns`, `--no-subagents`, `--rules`, `--sandbox`, `--disable-web-search`, `--system-prompt-override`, `--tools`. **Do not pass `--check` or `--best-of-n`** — both rejected on 1.0.3.
 

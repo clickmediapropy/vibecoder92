@@ -20,7 +20,7 @@ echo "== S0 baseline: $N standalone grok -p =="
 BASE_PIDS=()
 for i in $(seq 1 "$N"); do
   grok -p "List the files in this directory with the list_dir tool, then say DONE-$i" \
-    --cwd "$REPO" -m "$MODEL" --always-approve --no-memory \
+    --cwd "$REPO" -m "$MODEL" --always-approve \
     --output-format json > "$OUT/base-$i.json" 2>"$OUT/base-$i.err" &
   BASE_PIDS+=($!)
 done
@@ -41,7 +41,7 @@ S1_PIDS=()
 for i in $(seq 1 "$N"); do
   grok --leader --leader-socket "$SOCK" \
     -p "List the files in this directory with the list_dir tool, then say DONE-$i" \
-    --cwd "$REPO" -m "$MODEL" --always-approve --no-memory \
+    --cwd "$REPO" -m "$MODEL" --always-approve \
     --output-format json > "$OUT/s1-$i.json" 2>"$OUT/s1-$i.err" &
   S1_PIDS+=($!)
 done
@@ -57,11 +57,11 @@ echo "== S2: mixed cwd (MAIN + throwaway worktree) =="
 WT="$OUT/wt-spike"
 git -C "$REPO" worktree add -b swarm/leader-spike "$WT" HEAD >/dev/null
 grok --leader --leader-socket "$SOCK" -p "Run list_dir, say MAIN" \
-  --cwd "$REPO" -m "$MODEL" --always-approve --no-memory --output-format json \
+  --cwd "$REPO" -m "$MODEL" --always-approve --output-format json \
   > "$OUT/s2-main.json" 2>&1 &
 P_MAIN=$!
 grok --leader --leader-socket "$SOCK" -p "Run list_dir, say WT" \
-  --cwd "$WT" -m "$MODEL" --always-approve --no-memory --output-format json \
+  --cwd "$WT" -m "$MODEL" --always-approve --output-format json \
   > "$OUT/s2-wt.json" 2>&1 &
 P_WT=$!
 wait "$P_MAIN" "$P_WT" && echo "s2=pass" | tee "$OUT/s2.txt" || echo "s2=FAIL" | tee "$OUT/s2.txt"
@@ -72,7 +72,7 @@ echo "== S3: kill client mid-turn — does the leader session keep running? =="
 grok --leader --leader-socket "$SOCK" \
   -p "Use run_terminal_cmd to run exactly: touch SPIKE-S3-STARTED.txt && sleep 15 && touch SPIKE-S3-DONE.txt
 Then say DONE." \
-  --cwd "$WT" -m "$MODEL" --always-approve --no-memory > "$OUT/s3.log" 2>&1 &
+  --cwd "$WT" -m "$MODEL" --always-approve > "$OUT/s3.log" 2>&1 &
 P_S3=$!
 for _ in $(seq 1 60); do [[ -f "$WT/SPIKE-S3-STARTED.txt" ]] && break; sleep 0.5; done
 S3_STARTED=$([[ -f "$WT/SPIKE-S3-STARTED.txt" ]] && echo 1 || echo 0)
@@ -86,7 +86,7 @@ echo "s3_started=$S3_STARTED s3_files_after_kill=$S3_FILES (0=client kill cancel
 echo "== S4: read-only flags through the leader =="
 grok --leader --leader-socket "$SOCK" \
   -p "Try to create a file called S4-WRITE-TEST.txt. Report whether you could." \
-  --cwd "$WT" -m "$MODEL" --always-approve --no-memory --max-turns 5 \
+  --cwd "$WT" -m "$MODEL" --always-approve --max-turns 5 \
   --tools "read_file,grep,list_dir" > "$OUT/s4.log" 2>&1 || true
 [[ -f "$WT/S4-WRITE-TEST.txt" ]] && echo "s4=FAIL (reviewer wrote)" | tee "$OUT/s4.txt" \
                                  || echo "s4=pass (write blocked)" | tee "$OUT/s4.txt"

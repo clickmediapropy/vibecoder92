@@ -160,11 +160,7 @@ SCHEMA_FILE="$SKILL_ROOT/templates/worker-done.schema.json"
 # Mutates GROK_CMD after base flags are set — call once after GROK_CMD=(...)
 append_role_cli_flags() {
   GROK_CMD+=(--max-turns "$WORKER_MAX_TURNS")
-  # Cross-session memory isolation for workers (--no-memory since 1.0.0); coordinator keeps default.
-  # Opt out: GROK_SWARM_NO_MEMORY=0
-  if [[ "${GROK_SWARM_NO_MEMORY:-1}" != "0" ]]; then
-    GROK_CMD+=(--no-memory)
-  fi
+  # Grok 1.0.5 dropped top-level --no-memory (not in `grok --help`). Do not pass it.
 
   case "$ROLE_KIND" in
     scout|reviewer|logger)

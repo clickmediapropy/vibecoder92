@@ -1,6 +1,6 @@
 {
   "name": "grok-swarm",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Run autonomous multi-agent coding swarms on Grok CLI from Claude Code: parallel builders in isolated git worktrees, detached coordinator, dashboard, verify/fix/merge loop. Bundles the grok-swarm, usegrok and double-check skills.",
   "author": {
     "name": "Nico Delgado",
