@@ -51,6 +51,7 @@ const processKill = require('./process-kill.cjs');
 const hostStats = require('./host-stats.cjs');
 const { analyzeDispatchLog } = require('./log-analyze.cjs');
 const { buildWorkerResumeCommand } = require('./resume-cmd.cjs');
+const { workerModel, coordinatorModel } = require('./model-pin.cjs');
 const { buildOperatorGuide } = require('./operator-guide.cjs');
 
 const MAIL_TYPES = ['message', 'status', 'escalation', 'worker_done', 'swarm_complete'];
@@ -1359,7 +1360,7 @@ function buildResumeGrokCommand(i, title) {
         sessionId: i.sessionId,
         worktreePath: wtPath || null,
         promptFile,
-        model: process.env.GROK_SWARM_WORKER_MODEL || 'grok-4.6',
+        model: workerModel(),
         effort: 'medium',
         maxTurns,
       });
@@ -1367,11 +1368,11 @@ function buildResumeGrokCommand(i, title) {
     // Fallback if prompt file write failed
     const cwdPart = wtArg ? ' --cwd ' + wtArg : '';
     return 'SWARM_AGENT_NAME="' + agent + '" grok -p "' + resumePrompt + '" -r ' + i.sessionId + cwdPart +
-      ' -m grok-4.6 --always-approve --no-subagents --max-turns 100';
+      ' -m ' + workerModel() + ' --always-approve --no-subagents --max-turns 100';
   }
   if (wtArg) {
     return 'SWARM_AGENT_NAME="' + agent + '" grok -c -p "' + resumePrompt +
-      '" --cwd ' + wtArg + ' -m grok-4.6 --always-approve';
+      '" --cwd ' + wtArg + ' -m ' + workerModel() + ' --always-approve';
   }
   return '# No sessionId or worktree recorded — redispatch Mode B from the original prompt file and record a new dispatch';
 }
@@ -4367,8 +4368,8 @@ function renderCoordinatorPrompt(ws, opts) {
   const resumeInstructions = resume
     ? [
         '**RESUME mode:** Do NOT re-init the workspace. Read existing `.grok-swarm/` events, dispatches, and worktrees.',
-        'Reconcile running/paused builders first, then continue the main loop from current state.',
-        'If `pause.json` exists, run `swarm resume` and relaunch interrupted builders before new dispatches.',
+        'Reconcile running builders first. Each loop run `swarm tick --json` and do `next` in order.',
+        'Do not lift a pause yourself. Hold and hard-pause both come from tick.',
       ].join('\n')
     : [
         '**FRESH mode:** Workspace and tasks should already exist (parent agent planned them).',
@@ -4546,7 +4547,8 @@ function coordinatorCommand(argv) {
   const runScript = path.join(skillRootDir(), 'bin', 'run-coordinator.sh');
   if (!fs.existsSync(runScript)) die('Missing ' + runScript);
 
-  const model = args.model && args.model !== 'true' ? args.model : 'grok-4.6'; // coordinator only
+  const modelArg = args.model && args.model !== 'true' ? args.model : null;
+  const model = modelArg || coordinatorModel();
   const maxTurns = args['max-turns'] && args['max-turns'] !== 'true' ? String(args['max-turns']) : '500';
   const effort = args.effort && args.effort !== 'true' ? args.effort : 'high';
 
@@ -4555,10 +4557,10 @@ function coordinatorCommand(argv) {
     '--repo', repoRoot,
     '--prompt-file', promptFile,
     '--log', logFile,
-    '--model', model,
     '--max-turns', maxTurns,
     '--effort', effort,
   ];
+  if (modelArg) shellArgs.push('--model', modelArg);
   if (sessionId) shellArgs.push('--session', sessionId);
   if (args['print-only'] === 'true') shellArgs.push('--print-only');
 
@@ -4836,8 +4838,14 @@ const HELP = {
   resume: [
     'swarm resume [--all] [--json]',
     '  Lift pause: archive pause.json → pause-history/, print Mode C resume commands per interrupted builder',
-    '  (`grok -p "Resume..." --cwd <WT_PATH> -r <sessionId> -m grok-4.6`).',
+    '  (`grok -p "Resume..." --cwd <WT_PATH> -r <sessionId> -m` from bin/model-pin.env).',
     '  --all: resume every paused swarm under the registry.',
+  ].join('\n'),
+  tick: [
+    'swarm tick [--json]',
+    '  Next legal coordinator actions from board state. Does not merge, kill, dispatch, or resume.',
+    '  Types: hold, hard_pause, answer_mail, block, need_double_check, merge_candidate, dispatch, complete.',
+    '  Model and role flags for dispatch come from dispatch-grok.sh (bin/model-pin.env).',
   ].join('\n'),
   coordinator: [
     'swarm coordinator start [--daemon] [--resume] [--session ID] [--model M] [--max-turns N] [--print-only] [--foreground]',
@@ -5137,6 +5145,20 @@ function main() {
     }
     const ws = requireWorkspace(args);
     resumeCommand(ws, rest);
+    return;
+  }
+
+  if (area === 'tick') {
+    const ws = requireWorkspace(args);
+    require('./tick.cjs').tickCommand({
+      parseArgs,
+      pause: readPause(ws),
+      state: readState(ws),
+      dispatches: readDispatches(ws),
+      mail: readMailbox(path.join(ws.inbox, 'Coordinator')),
+      repoRoot: ws.repoRoot,
+      skillRoot: skillRootDir(),
+    }, rest);
     return;
   }
 

@@ -1041,7 +1041,7 @@
     html += '<section class="guide-block">';
     html += "<h2>Role → CLI flags</h2>";
     html +=
-      '<p class="guide-hint">Applied automatically by dispatch-grok.sh from the --agent label. Workers never pass --check or --best-of-n (both rejected on Grok CLI 1.0.3). Default model grok-4.6.</p>';
+      '<p class="guide-hint">Applied automatically by dispatch-grok.sh from the --agent label. Workers never pass --check or --best-of-n. Model comes from bin/model-pin.env.</p>';
     html += '<ul class="role-list">';
     roles.forEach(function (r) {
       html +=

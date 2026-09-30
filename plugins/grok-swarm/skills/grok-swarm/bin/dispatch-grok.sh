@@ -28,7 +28,7 @@ Options:
                  task → building as soon as grok starts (fixes dashboard lag).
   --no-auto-record  Disable auto dispatch record even if --task is set
   --print-only   Print the ensure + grok plan without running
-  --model M      Default: grok-4.6 (workers; override GROK_SWARM_WORKER_MODEL)
+  --model M      Default: bin/model-pin.env worker key (override GROK_SWARM_WORKER_MODEL)
   --effort L     low|medium|high|xhigh|max. Default from --agent role:
                    Scout* → low; Builder* → medium;
                    Reviewer*/Visual*/Logger*/Coordinator* → high
@@ -50,7 +50,18 @@ WT_PATH=""
 AGENT=""
 PROMPT_FILE=""
 LOG_FILE=""
-MODEL="${GROK_SWARM_WORKER_MODEL:-grok-4.6}"
+_PIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/model-pin.env"
+if [[ -f "$_PIN" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$_PIN"
+  set +a
+fi
+MODEL="${GROK_SWARM_WORKER_MODEL:-${GROK_SWARM_WORKER_MODEL_DEFAULT:-}}"
+if [[ -z "$MODEL" ]]; then
+  echo "model pin missing ($_PIN)" >&2
+  exit 1
+fi
 EFFORT_EXPLICIT=""
 PRINT_ONLY=0
 TASK_ID="${SWARM_TASK_ID:-}"
@@ -123,7 +134,7 @@ else
   EFFORT="$(default_effort_for_agent "$AGENT")"
 fi
 
-# --- role flags (Grok CLI 1.0.3; --check and --best-of-n still rejected) ---
+# --- role flags (do not pass --check or --best-of-n; see reference.md header) ---
 WORKER_MAX_TURNS="${GROK_SWARM_WORKER_MAX_TURNS:-100}"
 WORKER_SCHEMA_MODE="${GROK_SWARM_WORKER_JSON_SCHEMA_MODE:-off}"
 # Back-compat: GROK_SWARM_WORKER_JSON_SCHEMA=1 → replace

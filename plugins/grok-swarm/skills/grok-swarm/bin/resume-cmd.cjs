@@ -1,5 +1,7 @@
 'use strict';
 
+const { workerModel } = require('./model-pin.cjs');
+
 function shellQuote(s) {
   return "'" + String(s).replace(/'/g, "'\\''") + "'";
 }
@@ -13,20 +15,21 @@ function buildWorkerResumeCommand({
   sessionId,
   worktreePath,
   promptFile,
-  model = 'grok-4.6',
+  model,
   effort = 'medium',
   fork = true,
   maxTurns = 100,
 }) {
   if (!promptFile) throw new Error('promptFile required');
   if (!sessionId) throw new Error('sessionId required for resume');
+  const resolvedModel = model || workerModel();
   const parts = [
     'SWARM_AGENT_NAME=' + shellQuote(agentLabel),
     'grok',
     '--prompt-file',
     shellQuote(promptFile),
     '-m',
-    model,
+    resolvedModel,
     '--effort',
     effort,
     '--always-approve',

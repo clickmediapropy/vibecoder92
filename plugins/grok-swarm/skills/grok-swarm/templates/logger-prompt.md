@@ -1,7 +1,8 @@
 <!--
 grok-swarm LOGGER prompt — compounding learnings after work lands.
 Coordinator: run AFTER task/subswarm is merged (or goal done), never before gates+merge.
-  grok --prompt-file ... -m grok-4.6 --always-approve --effort high
+  grok --prompt-file ... --always-approve --effort high
+  (-m comes from bin/model-pin.env via dispatch-grok.sh)
   --disallowed-tools "search_replace,write" on product trees — allow writes only under learnings/docs/rules paths listed below.
   Prefer: allow write tools but HARD RULE: only learning/index/rule files.
 Delete this comment block from the final prompt.

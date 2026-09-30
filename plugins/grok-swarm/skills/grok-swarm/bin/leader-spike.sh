@@ -6,7 +6,18 @@ REPO="${1:?repo path}"; N="${2:-8}"
 SOCK="/tmp/grok-leader-spike.sock"
 OUT="/tmp/grok-leader-spike-$(date +%s)"
 mkdir -p "$OUT"
-MODEL="${GROK_SWARM_WORKER_MODEL:-grok-4.6}"
+_PIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/model-pin.env"
+if [[ -f "$_PIN" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$_PIN"
+  set +a
+fi
+MODEL="${GROK_SWARM_WORKER_MODEL:-${GROK_SWARM_WORKER_MODEL_DEFAULT:-}}"
+if [[ -z "$MODEL" ]]; then
+  echo "model pin missing ($_PIN)" >&2
+  exit 1
+fi
 
 rss_kb() { ps -o rss= -p "$1" 2>/dev/null | tr -d ' ' || echo 0; }
 

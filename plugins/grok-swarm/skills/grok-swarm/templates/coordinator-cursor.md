@@ -4,9 +4,9 @@
 
 **Effort:** Scout=`low`, Builder=`medium`, Reviewer/Visual/Logger/Coordinator=`high` (auto via `dispatch-grok.sh --agent`).
 
-**Models:** Coordinator and all workers use **`grok-4.6`** until `grok models` lists a separate worker/composer id. Override workers with `GROK_SWARM_WORKER_MODEL` / `dispatch-grok.sh --model`.
+**Models:** `bin/model-pin.env`. Override workers with `GROK_SWARM_WORKER_MODEL` / `dispatch-grok.sh --model`.
 
-**CLI:** Grok 1.0.3. Headless `-p --worktree` does **not** create a worktree — Mode A is always `dispatch-grok.sh --mode new`. Resume `-r` accepts session ID or title.
+**CLI:** Mode A is `dispatch-grok.sh --mode new` (pre-create the git worktree, process cwd = that tree). See `reference.md` header for the live `--worktree` probe. Resume `-r` accepts session ID or title.
 
 Do **not** use `Write` / `StrReplace` / host `Task` subagents for implementation.
 

@@ -6,7 +6,9 @@ Two layers:
 
 **Default:** a detached Grok CLI process is the Coordinator (`swarm coordinator start --daemon` / `swarm launch`). The parent agent plans tasks, launches, and exits. Manual parent-as-coordinator is Mode B (debug only). The coordinator never edits application code — only `swarm`, `dispatch-grok.sh`, `git merge`, and verify gates. Every code edit happens inside a builder `grok -p` run (see [usegrok](../usegrok/SKILL.md)).
 
-Verified against **Grok CLI v1.0.3** (audited **2026-08-12**; previous 1.0.0 / 0.2.117). `grok update --check --json` → latest `1.0.3` no update. Default model **`grok-4.6`** (`grok models`; `grok-4.5` still listed). Swarm-relevant flags live in this file; full dump: [usegrok/GROK-CLI-REFERENCE.md](../usegrok/GROK-CLI-REFERENCE.md) (regenerate with `grok --help` if that file lags). Capacity defaults canonical in [`templates/host-capacity.default.json`](templates/host-capacity.default.json) and `bin/capacity.cjs`.
+Model pin: [`bin/model-pin.env`](bin/model-pin.env) (`grok-4.7` for workers and the coordinator). Wrappers pass `-m` from that file. `GROK_SWARM_WORKER_MODEL` overrides workers. Swarm-relevant flags live in this file; full dump: [usegrok/GROK-CLI-REFERENCE.md](../usegrok/GROK-CLI-REFERENCE.md) (regenerate with `grok --help` if that file lags). Capacity defaults canonical in [`templates/host-capacity.default.json`](templates/host-capacity.default.json) and `bin/capacity.cjs`.
+
+**Worktree probe (one place).** CLI `grok 1.0.44 (5b807183dd79)`, 2026-09-29. Command: `grok -p "Reply with the single word PING" --cwd "$SCRATCH" --worktree probe-wt --always-approve --max-turns 1 -m grok-4.7` on scratch `/private/tmp/grok-wt-probe-huzx` (commit `290dcfd`). Exit 0, text `PING`, session `01a0efce-1580-73a2-80ff-dcb51c82906a`. `git worktree list` on the scratch repo stayed a single `main`. The flag did create a directory: `~/.grok/worktrees/tmp-grok-wt-probe-huzx/probe-wt`, registry id `probe-wt-1c109ef0d2e5b41a`, kind `fork`, `creation_mode` `standalone`, own `.git` (`--git-common-dir` is `.git`), toplevel equal to that path, branch `main`, same commit. That is a grok-managed fork, not a linked git worktree, so it cannot be `git merge`d as a worktree branch. Mode A stays `dispatch-grok.sh` pre-create of a real linked git worktree plus process cwd. Do not switch Mode A to raw `grok --worktree`.
 
 ### Role dispatch flags (source of truth)
 
@@ -36,8 +38,8 @@ Spend telemetry: `log-analyze.cjs` parses streaming-json `end` events (`sessionI
 
 | Flag / command | What it does | Swarm adoption |
 | --- | --- | --- |
-| Default model `grok-4.6` | CLI default; `grok-4.5` still listed | **Adopted:** wrappers default `-m grok-4.6`. Resume with same `-m` or Mode B fresh |
-| `grok -p --worktree` is a no-op for tree creation | Help: “Headless (`-p`) does not create a worktree from this flag” | **Confirms Mode A:** `dispatch-grok.sh` pre-creates `git worktree` + process cwd. Never rely on raw `grok --worktree` in headless |
+| Model pin `bin/model-pin.env` | Workers and coordinator | **Adopted:** wrappers read the pin. Resume with the same `-m` or Mode B fresh |
+| `grok -p --worktree` | On 1.0.44 creates a standalone fork (own `.git`), not a linked git worktree | **Mode A stays pre-create.** See the header probe. Never raw `grok --worktree` |
 | `-r` / `--resume` by ID **or title** | Non-ID values match session titles in the current directory (case-insensitive; UUID-shaped values always mean IDs) | **Adopted as fallback:** prefer dispatch-recorded sessionId; if lost, `grok sessions list` then `-r "<title>"` with `--cwd "$WT_PATH"` |
 | `grok doctor [--json]` | Terminal/clipboard/color/input diagnostic without starting Grok | **Adopted:** optional pre-flight (`grok doctor --json`). Not a swarm gate |
 | `grok du` / `disk-usage` (`--json`) | `~/.grok` disk: top-level dirs + each worktree size/age/label | **Adopted:** host hygiene before mega / cleanup. `grok du --json` then `grok worktree gc --max-age 7d --dry-run` |
@@ -225,20 +227,20 @@ node <skill>/bin/gate.cjs -- npm run typecheck        # typical builder usage
 ```
 Slot semaphore for heavy gate subprocesses (`tsc`, `vitest`, `npm install`, builds — ~1 GB RSS each; these, not the grok processes, trigger low-memory auto-pauses). Blocks until one of `max_heavy_tools` slots frees (host capacity, default **3**), runs the command with inherited stdio, propagates its exit code, releases on exit/SIGINT/SIGTERM. Slots are `slot-<i>.pid` files under `<nearest .grok-swarm walking up from cwd>/gate-slots/` — for worktree builders that is whatever `.grok-swarm/` sits above `~/.grok/worktrees/` (a stray `~/.grok-swarm/` counts; the 2026-08-13 live proof resolved there), and `/tmp/grok-gate-slots` only when the entire ancestor path has none. The capacity file resolves the same way, so a repo's `max_heavy_tools` override does not reach worktree builders — pass `--max N` or `--slots-dir MAIN/.grok-swarm/gate-slots` explicitly to pin pool and ceiling. Claims are atomic `O_EXCL` creates; dead-holder and poisoned (empty/invalid, >10s old) slots are reclaimed. Advisory — enforced by prompt (`templates/builder-prompt.md`), like file leases.
 
-### Leader mode verdict (spiked 2026-08-13 — not shipped)
+### Leader mode verdict (spiked 2026-09-29 on CLI 1.0.44 — not shipped)
 
-`bin/leader-spike.sh <repo> [n]` measures Jcode-style single-server hosting on `grok agent leader`. Result on grok 1.0.3 (16 GB Mac, 8 workers, `grok-4.6`):
+`bin/leader-spike.sh <repo> [n]` measures Jcode-style single-server hosting on `grok agent leader`. One run, model from `bin/model-pin.env` (`grok-4.7`), 8 workers. Pass bar unchanged: S1 aggregate RSS ≤ half of S0.
 
 | Gate | Result |
 |------|--------|
-| S0 baseline: 8 × standalone `grok -p` | 521,296 KB aggregate RSS mid-flight |
-| S1 RAM: 8 × `--leader` clients + leader | 743,616 KB (leader 44,032 KB) → **0.70×, FAIL** (criterion ≥2× lower) — clients are full-weight |
+| S0 baseline: 8 × standalone `grok -p` | 1,012,512 KB aggregate RSS mid-flight |
+| S1 RAM: 8 × `--leader` clients + leader | 1,123,680 KB (leader 42,448 KB) → **0.90×, FAIL** (S0/S1; criterion ≥2×) — clients are full-weight |
 | S1 sessions | 8/8 distinct sessionIds (multiplexing works) |
 | S2 mixed cwd (MAIN + worktree, one leader) | pass |
-| S3 client `kill -9` mid-tool | leader **keeps executing** → any future wiring needs `leader_pause_mode: "leader"` |
+| S3 client `kill -9` mid-tool | leader **keeps executing** (`s3_files_after_kill=1`) → any future wiring needs `leader_pause_mode: "leader"` |
 | S4 `--tools read_file,grep,list_dir` via leader | pass (write blocked) |
 
-Decision matrix row **S1 fail → no leader wiring**: fat `grok -p` workers + the gate semaphore + capacity ceilings are the shipped topology. Revisit only if a future Grok CLI ships thin leader clients. Full record: the leader-mode spike notes.
+S1 fail: topology stays fat `grok -p` plus the gate semaphore. Do not wire `grok leader`. Revisit only if a future Grok CLI ships thin leader clients. Prior 2026-08-13 record (also S1 fail, 0.70×): the leader-mode spike notes.
 
 ### board / state
 ```bash
@@ -256,7 +258,7 @@ swarm resume [--json]
 
 `resume` archives the manifest to `pause-history/` and prints one relaunch command per interrupted builder whose task is still unfinished:
 
-- **Mode C** when `sessionId` was recorded: `grok -p "Resume..." --cwd <WT_PATH> -r <sessionId> -m grok-4.6 --always-approve`
+- **Mode C** when `sessionId` was recorded: `grok -p "Resume..." --cwd <WT_PATH> -r <sessionId> -m <bin/model-pin.env> --always-approve`
 - **Mode B** when no session: `grok -c -p "Resume..." --cwd <WT_PATH> ...` (shell cwd = worktree in reaping harnesses)
 
 The coordinator relaunches each command (foreground Shell in Cursor: `block_until_ms: 0`, no `&`), records new dispatches, and re-enters the monitoring loop. `--json` gives the machine-readable resume plan.
@@ -360,9 +362,9 @@ cd ~/repos/myapp && swarm watch
 
 | Mode | When | Invocation |
 |------|------|------------|
-| **A — New parallel builder** | First dispatch | `dispatch-grok.sh --mode new` — **pre-create** `git worktree` + process cwd. Do **not** pass `grok --worktree` (1.0.3: `-p` does not create a worktree from that flag) |
+| **A — New parallel builder** | First dispatch | `dispatch-grok.sh --mode new` — **pre-create** `git worktree` + process cwd. Do **not** pass `grok --worktree` (header probe: standalone fork, not a mergeable worktree) |
 | **B — Existing worktree** | Pause/resume, partial work, guard STOP recovery | Shell cwd = `$WT_PATH`; omit grok `--cwd` and `--worktree` |
-| **C — Fix loop / session resume** | Same builder + worktree + context | `--cwd "$WT_PATH" -r "$SESSION" -m grok-4.6` (`-r` = ID or title; prefer recorded sessionId) |
+| **C — Fix loop / session resume** | Same builder + worktree + context | `--cwd "$WT_PATH" -r "$SESSION" -m <bin/model-pin.env>` (`-r` = ID or title; prefer recorded sessionId) |
 | **D — Fork to new worktree** | Intentional xAI fork only (interactive / non-`-p`) | `grok -w -r "$SESSION" -p "..."` |
 
 Use `${CLAUDE_PLUGIN_ROOT}/skills/grok-swarm/bin/dispatch-grok.sh` to print/run Mode A/B without copy-paste errors.
@@ -376,10 +378,10 @@ Use `${CLAUDE_PLUGIN_ROOT}/skills/grok-swarm/bin/dispatch-grok.sh` to print/run 
 ```bash
 grok --prompt-file /tmp/grok-swarm-<slug>-prompt.md \
   --cwd /path/to/repo \
-  -m grok-4.6 \
+  -m <bin/model-pin.env> \
   --always-approve
 ```
-Mandatory: a single-turn prompt via `--prompt-file <path>` (preferred — no shell-quote mangling) or `-p "<prompt>"` — **never both**: `--prompt-file` replaces `-p`; combining them errors with `'--single <PROMPT>' cannot be used with '--prompt-file'`. Also mandatory: `--always-approve` (or it hangs on the first tool prompt), `--cwd`, and the **role model**: **coordinator** `-m grok-4.6`; **workers** (builders/reviewers/scouts/loggers/visual/fix/resume) `-m grok-4.6`. Wrappers enforce defaults (`run-coordinator.sh` → 4.6; `dispatch-grok.sh` → 4.6 (or GROK_SWARM_WORKER_MODEL)).
+Mandatory: a single-turn prompt via `--prompt-file <path>` (preferred — no shell-quote mangling) or `-p "<prompt>"` — **never both**: `--prompt-file` replaces `-p`; combining them errors with `'--single <PROMPT>' cannot be used with '--prompt-file'`. Also mandatory: `--always-approve` (or it hangs on the first tool prompt), `--cwd`, and the **role model**: **coordinator** `-m <bin/model-pin.env>`; **workers** (builders/reviewers/scouts/loggers/visual/fix/resume) `-m <bin/model-pin.env>`. Wrappers enforce the pin (`run-coordinator.sh` and `dispatch-grok.sh`; workers override with `GROK_SWARM_WORKER_MODEL`).
 
 ### Builder prompts — use the template
 Fill `templates/builder-prompt.md` placeholders (`{{BUILDER_LABEL}}`, `{{TASK_ID}}`, `{{SWARM_ID}}`, `{{SWARM_BIN}}`, `{{OWNED_FILES_LIST}}`, `{{TASK_DESCRIPTION}}`, `{{ACCEPTANCE_CRITERIA}}`, `{{VERIFICATION_COMMANDS}}`) and save to `/tmp/`. The template already contains the repo-alignment block, the hard scope boundary, and the swarm mail/task protocol. A `grok -p` run cannot see this conversation or the board — the prompt is its entire world.
@@ -395,8 +397,8 @@ ${CLAUDE_PLUGIN_ROOT}/skills/grok-swarm/bin/dispatch-grok.sh --mode new \
   --repo "$REPO" --worktree wt-domain-a --base "$BASE" \
   --agent "Builder 1" --prompt-file /tmp/grok-a.md --log /tmp/grok-a.log
 
-# FORBIDDEN in headless 1.0.3: grok --cwd "$REPO" --worktree wt-domain-a
-# (`-p` does not create a worktree from --worktree; session can land on MAIN)
+# FORBIDDEN: grok --cwd "$REPO" --worktree wt-domain-a
+# (header probe: -p --worktree creates a standalone fork; session can land on MAIN)
 ```
 
 Poll the printed `WORKTREE_PATH=` from `dispatch-grok.sh` (and `git -C "$WT_PATH" rev-parse --show-toplevel`) up to **30s**. `grok worktree list` only shows **registry-tracked** trees — Mode A git worktrees are often `tracked: false`.
@@ -421,7 +423,7 @@ SCHEMA=$(cat ${CLAUDE_PLUGIN_ROOT}/skills/grok-swarm/templates/worker-done.schem
 # Prefer dispatch-grok.sh; GROK_SWARM_WORKER_JSON_SCHEMA_MODE=replace swaps streaming for --json-schema
 SWARM_AGENT_NAME="Builder 1" grok --prompt-file /tmp/grok-a.md \
   --cwd "$WT_PATH" \
-  -m grok-4.6 --always-approve \
+  -m <bin/model-pin.env> --always-approve \
   --json-schema "$SCHEMA" | tee /tmp/grok-a.json
 
 SESSION_ID=$(jq -r '.sessionId' /tmp/grok-a.json)
@@ -444,7 +446,7 @@ Intervene: out-of-scope edits or a wedged run → `kill <pid>` (from the dispatc
 ```bash
 SWARM_AGENT_NAME="Reviewer" grok --prompt-file /tmp/grok-review.md \
   --permission-mode plan \
-  --cwd /path/to/repo -m grok-4.6 --always-approve --effort high
+  --cwd /path/to/repo -m <bin/model-pin.env> --always-approve --effort high
 git -C /path/to/repo status    # MUST be unchanged
 ```
 Belt-and-suspenders: `--deny` write rules or `--tools "read_file,grep,list_dir"`. The reviewer prompt must still say "Do NOT modify, create, or delete files" and ask for a PASS/REVISE verdict per task.
@@ -456,10 +458,10 @@ Belt-and-suspenders: `--deny` write rules or `--tools "read_file,grep,list_dir"`
 WT_PATH=$(grok worktree list --json | jq -r '.[] | select(.name=="<wt-name>") | .path')
 SESSION=$(swarm dispatch list --task task-a --json | jq -r '.[-1].sessionId')
 grok -p "Fix: [exact issues from verification]" \
-  --cwd "$WT_PATH" -r "$SESSION" -m grok-4.6 --always-approve
+  --cwd "$WT_PATH" -r "$SESSION" -m <bin/model-pin.env> --always-approve
 
 # No captured sessionId? Prefer -c for that cwd, or -r "<session title>" (1.0.3 title match):
-grok -c -p "Fix: ..." --cwd "$WT_PATH" -m grok-4.6 --always-approve
+grok -c -p "Fix: ..." --cwd "$WT_PATH" -m <bin/model-pin.env> --always-approve
 # NEVER -r without --cwd when continuing existing wt-* work
 # On MODEL_SWITCH_INCOMPATIBLE_AGENT: fresh Mode B, no -r
 ```
@@ -477,17 +479,17 @@ grok du --json
 grok worktree gc --max-age 7d --dry-run   # then drop --dry-run; without --max-age, gc expires nothing
 ```
 
-### Headless command cheat sheet (1.0.3)
+### Headless command cheat sheet
 
 **Prompt source (pick one):** `-p "..."` OR `--prompt-file <path>` (preferred) OR `--prompt-json`. Never `-p` + `--prompt-file`.
 
-**Mandatory on every swarm `grok` run:** `--always-approve`, correct `--cwd`, and role model (`grok-4.6` coordinator / `grok-4.6` workers). Do not pass `--no-memory` (gone from 1.0.5 `grok --help`).
+**Mandatory on every swarm `grok` run:** `--always-approve`, correct `--cwd`, and `-m` from `bin/model-pin.env`. Do not pass `--no-memory`.
 
 **Output:** `--output-format plain|json|streaming-json|streaming-messages-json` (swarm uses `streaming-json` ACP updates for live monitor; `streaming-messages-json` needs `--include-partial-messages` for deltas); `--json-schema` for validated worker_done (via `GROK_SWARM_WORKER_JSON_SCHEMA_MODE=replace`).
 
-**Sessions:** `-c` continue, `-r <id-or-title>` resume (UUID-shaped → ID; else title match in cwd), `-s <uuid>` new named session; list via `grok sessions list -n 10`. Mode C fix loop: `--prompt-file` + `--cwd <worktree-path> -r <id> --fork-session --max-turns` — never `-r` without `--cwd` on existing trees. Mode D fork: `grok -w -r <id>` (new worktree only; `-p` still does not create the tree); remote D adds `--restore-code` to restore snapshot codebase (local stays conversation-only).
+**Sessions:** `-c` continue, `-r <id-or-title>` resume (UUID-shaped → ID; else title match in cwd), `-s <uuid>` new named session; list via `grok sessions list -n 10`. Mode C fix loop: `--prompt-file` + `--cwd <worktree-path> -r <id> --fork-session --max-turns` — never `-r` without `--cwd` on existing trees. Mode D fork: `grok -w -r <id>` (new worktree only; headless `-p --worktree` creates a standalone fork — header probe); remote D adds `--restore-code` to restore snapshot codebase (local stays conversation-only).
 
-**Worktrees:** Mode A uses git worktree + process cwd. **Do not** pass `grok --worktree` on headless launch (1.0.3: `-p` does not create a worktree from that flag). Manage via `git worktree` + `swarm cleanup`; `grok worktree list|show|rm` for registry-tracked trees; `grok worktree gc --max-age 7d` (without `--max-age`, gc expires nothing). Disk: `grok du --json`.
+**Worktrees:** Mode A uses git worktree + process cwd. **Do not** pass `grok --worktree` on headless launch (header probe). Manage via `git worktree` + `swarm cleanup`; `grok worktree list|show|rm` for registry-tracked trees; `grok worktree gc --max-age 7d` (without `--max-age`, gc expires nothing). Disk: `grok du --json`.
 
 **Read-only roles:** `dispatch-grok.sh` passes `--tools "read_file,grep,list_dir"` (strict) or `--disallowed-tools search_replace`. Optional `--permission-mode plan` for reviewers.
 
@@ -499,10 +501,10 @@ Full tables: [GROK-CLI-REFERENCE.md](../usegrok/GROK-CLI-REFERENCE.md) (may lag;
 
 ### Pre-flight / auth
 ```bash
-grok --version               # expect >= 1.0.3
-grok models                  # default grok-4.6; grok-4.5 still listed
+grok --version               # probed 1.0.44 (5b807183dd79) on 2026-09-29
+grok models                  # pin must be one of the listed ids (bin/model-pin.env)
 cd <repo> && grok inspect --json
-grok update --check --json   # 1.0.3 latest stable as of 2026-08-12
+grok update --check --json   # live stable on this machine: 1.0.44 (2026-09-29)
 grok doctor --json           # terminal/clipboard diagnostic
 grok du --json               # ~/.grok disk before mega / cleanup
 export XAI_API_KEY="xai-..." # headless/CI auth; or grok login --device-auth
@@ -512,7 +514,7 @@ export XAI_API_KEY="xai-..." # headless/CI auth; or grok login --device-auth
 
 ## Failure modes
 
-**Full operator matrix (30 edges A1–F3):** [`docs/2026-07-15-swarm-edgecases.md`](docs/2026-07-15-swarm-edgecases.md) · catalog `bin/edge-matrix.cjs` · high-traffic recovery also in [SKILL.md § Failure modes](SKILL.md#failure-modes--recovery). Quality bar: [`docs/2026-07-15-fast-quality-bar.md`](docs/2026-07-15-fast-quality-bar.md).
+**Full operator matrix (30 edges A1–F3):** [`docs/2026-07-15-swarm-edgecases.md`](docs/2026-07-15-swarm-edgecases.md) · catalog `bin/edge-matrix.cjs` · high-traffic recovery also in [references/failure-modes.md](references/failure-modes.md). Quality bar: [`docs/2026-07-15-fast-quality-bar.md`](docs/2026-07-15-fast-quality-bar.md).
 
 | Edge | Symptom | Cause → action |
 |------|---------|----------------|
@@ -538,7 +540,7 @@ export XAI_API_KEY="xai-..." # headless/CI auth; or grok login --device-auth
     → start the live dashboard: swarm dashboard --open (background; user watches progress in Chrome)
  4. swarm task ready → fill templates/builder-prompt.md per task → dispatch parallel
     `dispatch-grok.sh --mode new` + swarm dispatch record each
-    (never raw `grok --worktree` in headless — 1.0.3 `-p` does not create a worktree)
+    (never raw `grok --worktree` in headless — header probe: standalone fork, not a linked worktree)
  5. Monitor loop: swarm dispatch list --status running + log tails + mail check --consume + worktree scope check
  6. On worker_done: verify read-only (git status/diff vs owned files; repo gates) → dispatch update --status done
  7. Fix loop via -r <sessionId from dispatch record> (≤3 rounds; then blocked + escalate)

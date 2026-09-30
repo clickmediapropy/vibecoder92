@@ -165,7 +165,7 @@ function buildOperatorGuide({
         },
         {
           cmd: 'grok du --json\ngrok worktree list --json\ngrok worktree gc --max-age 7d --dry-run',
-          why: 'Disk of ~/.grok; list tracked worktrees; dry-run GC (1.0.3: --max-age required or gc expires nothing).',
+          why: 'Disk of ~/.grok; list tracked worktrees; dry-run GC (--max-age required or gc expires nothing).',
         },
         {
           cmd: bin + ' mega doctor --expect-clean --repo ' + qRepo,
@@ -178,8 +178,8 @@ function buildOperatorGuide({
       title: 'Useful env (workers / dispatch-grok.sh)',
       items: [
         {
-          cmd: 'export GROK_SWARM_WORKER_MAX_TURNS=100   # default worker --max-turns\nexport GROK_SWARM_SANDBOX=workspace      # read-only scouts; workspace builders\nexport GROK_SWARM_WORKER_JSON_SCHEMA_MODE=replace  # json + worker-done.schema\nexport GROK_SWARM_DISABLE_WEB_SEARCH=1   # builders only\nexport GROK_SWARM_FORK_ON_FIX=1          # resume --fork-session\nexport GROK_SWARM_WORKTREE_GC=1          # mega cleanup runs grok worktree gc --max-age\nexport GROK_SWARM_WORKTREE_GC_MAX_AGE=7d # required by CLI 1.0.3 or gc expires nothing',
-          why: 'Optional flags applied by dispatch-grok.sh / mega cleanup. Never pass --check or --best-of-n (both rejected on Grok CLI 1.0.3).',
+          cmd: 'export GROK_SWARM_WORKER_MAX_TURNS=100   # default worker --max-turns\nexport GROK_SWARM_SANDBOX=workspace      # read-only scouts; workspace builders\nexport GROK_SWARM_WORKER_JSON_SCHEMA_MODE=replace  # json + worker-done.schema\nexport GROK_SWARM_DISABLE_WEB_SEARCH=1   # builders only\nexport GROK_SWARM_FORK_ON_FIX=1          # resume --fork-session\nexport GROK_SWARM_WORKTREE_GC=1          # mega cleanup runs grok worktree gc --max-age\nexport GROK_SWARM_WORKTREE_GC_MAX_AGE=7d # required or gc expires nothing',
+          why: 'Optional flags applied by dispatch-grok.sh / mega cleanup. Never pass --check or --best-of-n. Model: bin/model-pin.env.',
         },
       ],
     },

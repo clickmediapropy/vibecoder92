@@ -15,7 +15,7 @@ Options:
   --repo PATH         Main repo root (required)
   --prompt-file PATH  Rendered coordinator prompt (required)
   --log PATH          streaming-json log file (required)
-  --model M           Default: grok-4.6 (coordinators only)
+  --model M           Default: bin/model-pin.env coordinator key
   --max-turns N       Default: 500
   --session ID        Resume coordinator session with -r (Mode C for the coordinator itself)
   --effort LEVEL      Default: high
@@ -27,7 +27,18 @@ EOF
 REPO=""
 PROMPT_FILE=""
 LOG_FILE=""
-MODEL="grok-4.6"
+_PIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/model-pin.env"
+if [[ -f "$_PIN" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$_PIN"
+  set +a
+fi
+MODEL="${GROK_SWARM_COORDINATOR_MODEL_DEFAULT:-}"
+if [[ -z "$MODEL" ]]; then
+  echo "model pin missing ($_PIN)" >&2
+  exit 1
+fi
 MAX_TURNS="500"
 SESSION=""
 EFFORT="high"
