@@ -4221,6 +4221,7 @@ function dashboardCommand(argv) {
           ext === '.html' ? 'text/html; charset=utf-8' :
           ext === '.json' ? 'application/json; charset=utf-8' :
           ext === '.svg' ? 'image/svg+xml' :
+          ext === '.png' ? 'image/png' :
           ext === '.frag' || ext === '.vert' || ext === '.glsl' ? 'text/plain; charset=utf-8' :
           'application/octet-stream';
         res.writeHead(200, {

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#0a0c14" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#f6f7fa" media="(prefers-color-scheme: light)">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -14,6 +14,10 @@
      Geist still wins when it happens to be installed locally. -->
 <link rel="stylesheet" href="/dashboard/css/core.css">
 <link rel="stylesheet" href="/dashboard/css/fx.css">
+<link rel="stylesheet" href="/dashboard/css/mobile.css">
+<link rel="manifest" href="/dashboard/manifest.json">
+<link rel="icon" href="/dashboard/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/dashboard/icon-180.png">
 <style>
   /* Critical first paint. NOTE: this wins the cascade over linked sheets for
      equal-specificity rules, so it must stay theme-aware (light-dark). */
@@ -63,10 +67,18 @@
     </div>
   </div>
   <div class="topbar-actions">
-    <div class="seg ctl-seg" id="ctl-seg" aria-label="Swarm control">
-      <button type="button" id="ctl-hold" title="Finish running builders, dispatch nothing new">Hold</button>
-      <button type="button" id="ctl-pause" title="Kill builders + stop coordinator (state kept)">Pause</button>
-      <button type="button" id="ctl-resume" title="Lift hold/pause, restart coordinator">Resume</button>
+    <!-- Phone: this wrapper becomes the command bar row (state capsule + controls). Desktop: display:contents. -->
+    <div class="mob-cmd" id="mob-cmd">
+      <button type="button" class="mob-state" id="mob-state" data-tone="unknown" aria-label="Swarm state">
+        <span class="mob-state-dot" aria-hidden="true"></span>
+        <span class="mob-state-label" id="mob-state-label">Connecting</span>
+        <span class="mob-state-stale" id="mob-state-stale" hidden></span>
+      </button>
+      <div class="seg ctl-seg" id="ctl-seg" aria-label="Swarm control">
+        <button type="button" id="ctl-hold" title="Finish running builders, dispatch nothing new">Hold</button>
+        <button type="button" id="ctl-pause" title="Kill builders + stop coordinator (state kept)">Pause</button>
+        <button type="button" id="ctl-resume" title="Lift hold/pause, restart coordinator">Resume</button>
+      </div>
     </div>
     <button type="button" class="btn grok-cinema-btn" id="cinematic-toggle" aria-pressed="false" title="More field, softer chrome"><span class="cinema-ico" aria-hidden="true">◈</span> Cinema</button>
     <div class="seg" role="tablist" id="view-seg">
@@ -76,6 +88,9 @@
     </div>
   </div>
 </header>
+
+<!-- Phone board: status tabs (one column at a time). In flow under the topbar, never fixed. -->
+<div class="mob-chips" id="mob-chips" role="tablist" hidden aria-label="Board columns"></div>
 
 <div class="app" id="app">
 
@@ -93,18 +108,34 @@
   </section>
 
   <section id="chat-panel" class="panel chat-panel" aria-label="Coordinator chat">
-    <div class="chat-head"><h3>Coordinator</h3><span class="chat-status" id="chat-status">—</span></div>
-    <div id="chat-list" class="chat-list"></div>
+    <div class="chat-head">
+      <h3>Coordinator</h3><span class="chat-status" id="chat-status">—</span>
+      <button type="button" class="btn chat-add" id="chat-add" aria-controls="task-sheet" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> Task
+      </button>
+    </div>
+    <div id="chat-list" class="chat-list" role="log" aria-label="Messages with the coordinator"></div>
+    <!-- Phone only: one-tap prompts. Each sends real mail to the coordinator. -->
+    <div class="chat-quick" id="chat-quick" aria-label="Quick messages">
+      <button type="button" class="chat-chip" data-say="Status report: what is running, what is next, anything blocked?">Status report</button>
+      <button type="button" class="chat-chip" data-say="What is blocked right now, and what do you need from me to unblock it?">What's blocked?</button>
+      <button type="button" class="chat-chip" data-say="Let running builders finish, then hold: dispatch nothing new until I say so.">Finish, then hold</button>
+    </div>
     <form id="chat-form" class="chat-form">
-      <textarea id="chat-input" rows="2" placeholder="Steer the coordinator… (Enter to send, Shift+Enter newline)"></textarea>
-      <button type="submit" class="btn">Send</button>
+      <textarea id="chat-input" rows="2" enterkeyhint="send" autocomplete="off" aria-label="Message the coordinator" placeholder="Steer the coordinator… (Enter to send, Shift+Enter newline)"></textarea>
+      <button type="submit" class="btn chat-send" aria-label="Send"><span class="chat-send-lab">Send</span><svg class="chat-send-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
     </form>
-    <details class="chat-task">
+    <!-- Phone: scrim + bottom sheet share .app's stacking context (a body-level scrim would cover the sheet). -->
+    <div class="sheet-scrim" id="sheet-scrim"></div>
+    <!-- Desktop: inline disclosure. Phone: bottom sheet opened by the + Task button. -->
+    <details class="chat-task" id="task-sheet">
       <summary>Add task</summary>
+      <div class="sheet-grab" aria-hidden="true"></div>
+      <div class="sheet-head"><strong>New task</strong><button type="button" class="btn sheet-close" id="task-sheet-close">Cancel</button></div>
       <form id="task-form" class="task-form">
-        <input id="task-title" placeholder="Title" required>
-        <input id="task-files" placeholder="Files (comma-separated, real paths)">
-        <input id="task-acceptance" placeholder="Acceptance criteria">
+        <label class="field"><span class="field-label">Title</span><input id="task-title" placeholder="Title" required autocomplete="off" enterkeyhint="next"></label>
+        <label class="field"><span class="field-label">Files</span><input id="task-files" placeholder="Files (comma-separated, real paths)" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="next"></label>
+        <label class="field"><span class="field-label">Acceptance</span><input id="task-acceptance" placeholder="Acceptance criteria" autocomplete="off" enterkeyhint="done"></label>
         <button type="submit" class="btn">Create task</button>
       </form>
     </details>
@@ -157,6 +188,13 @@
 
     <!-- ===== Center: the board ===== -->
     <main class="board" id="main-view">
+      <!-- Phone only: glanceable mission strip; tap opens the Mission tab. -->
+      <button type="button" class="mob-now" id="mob-now" aria-label="Mission progress">
+        <span class="mob-now-ring" aria-hidden="true"><b id="mob-now-pct">-</b></span>
+        <span class="mob-now-text"><span class="mob-now-count" id="mob-now-count">-</span><span class="mob-now-sub" id="mob-now-sub"></span></span>
+        <span class="mob-now-ram" id="mob-now-ram" hidden></span>
+        <svg class="mob-now-go" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
       <div id="kanban-view" class="kanban" aria-label="Task board"></div>
       <div id="timeline-view" hidden aria-label="Task timeline"></div>
       <div id="guide-view" class="guide" hidden aria-label="Operator guide"></div>
@@ -188,6 +226,8 @@
   </div>
 
   <footer id="footer" aria-live="polite">Connecting</footer>
+  <!-- Fixed corner badge on desktop; end of the scroll on phones (never over the nav). -->
+  <span class="brand-badge" title="nicodelgado.dev">made by nicodelgado.dev</span>
 </div>
 </div>
 
@@ -213,6 +253,13 @@
     <span class="mob-lab">Ops</span>
     <span class="mob-badge" id="mob-badge-ops" hidden></span>
   </button>
+  <button type="button" id="mob-chat" data-mview="chat" aria-label="Chat with the coordinator">
+    <span class="mob-ico" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 015.5 4h13A1.5 1.5 0 0120 5.5v9a1.5 1.5 0 01-1.5 1.5H10l-4.5 4v-4h0A1.5 1.5 0 014 14.5z"/></svg>
+    </span>
+    <span class="mob-lab">Chat</span>
+    <span class="mob-badge" id="mob-badge-chat" hidden></span>
+  </button>
   <button type="button" id="mob-guide" data-mview="guide" aria-label="Guide">
     <span class="mob-ico" aria-hidden="true">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 114 2c-.7.5-1.5 1-1.5 2.5"/><circle cx="12" cy="17" r="0.8" fill="currentColor" stroke="none"/></svg>
@@ -221,8 +268,11 @@
   </button>
 </nav>
 
-<!-- Mobile board status chips (jump / scroll-snap to columns) -->
-<div class="mob-chips" id="mob-chips" hidden aria-label="Status filters"></div>
+<!-- Phone: action feedback (control results, send / task errors). Sits above the nav. -->
+<div class="toast" id="toast" role="status" aria-live="polite" hidden>
+  <span class="toast-msg" id="toast-msg"></span>
+  <button type="button" class="toast-x" id="toast-x" aria-label="Dismiss">✕</button>
+</div>
 
 <!-- Log bottom sheet -->
 <div class="log-sheet" id="log-drawer" aria-hidden="true">
@@ -244,6 +294,7 @@
      structure-key → board-column → data (store/poll) → ui (DOM). engine is optional field. -->
 <script src="/dashboard/js/structure-key.js"></script>
 <script src="/dashboard/js/board-column.js"></script>
+<script src="/dashboard/js/mobile-model.js"></script>
 <script src="/dashboard/js/mission-root.js"></script>
 <script src="/dashboard/js/engine.js"></script>
 <script src="/dashboard/js/data.js"></script>
@@ -308,6 +359,5 @@
   document.addEventListener("visibilitychange", function () { if (!document.hidden) tick(); });
 })();
 </script>
-<span class="brand-badge" title="nicodelgado.dev">made by nicodelgado.dev</span>
 </body>
 </html>

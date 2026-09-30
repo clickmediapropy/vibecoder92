@@ -1,0 +1,14 @@
+{
+  "name": "Swarm Mission Control",
+  "short_name": "Swarm",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0c14",
+  "theme_color": "#0a0c14",
+  "icons": [
+    { "src": "/dashboard/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/dashboard/icon-180.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

@@ -1639,7 +1639,7 @@ footer {
   position: fixed;
   left: 0; right: 0; bottom: 0;
   z-index: 80;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   height: calc(56px + var(--safe-b));
   padding: 2px max(4px, var(--safe-r)) var(--safe-b) max(4px, var(--safe-l));
   border-top: 1px solid var(--border);
@@ -1710,10 +1710,9 @@ footer {
 /* Status chips (mobile board): jump between kanban columns */
 .mob-chips {
   display: none;
-  position: fixed;
-  left: 0; right: 0;
-  top: calc(var(--header-h));
-  z-index: 40;
+  position: relative;
+  flex: 0 0 auto;
+  z-index: 20;
   gap: 6px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -1733,9 +1732,9 @@ footer {
   background: color-mix(in oklch, var(--bg-elev) 70%, transparent);
   color: var(--fg-2);
   border-radius: 999px;
-  padding: 7px 12px;
-  min-height: 34px;
-  font-size: 12px;
+  padding: 8px 14px;
+  min-height: 44px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   touch-action: manipulation;
@@ -1788,11 +1787,8 @@ footer {
 
   .mob-nav { display: grid; }
 
-  /* Board view: show status chips under topbar */
+  /* Board view: status tabs sit in flow under the topbar (no fixed offset math). */
   body.mob-board-view .mob-chips { display: flex; }
-  body.mob-board-view .app {
-    padding-top: calc(var(--chips-h) + 4px);
-  }
 
   /* Clear fixed .mob-nav only in the scrollport — not on body (avoids ghost scroll). */
   .app {
@@ -1838,7 +1834,7 @@ footer {
     padding-bottom: 6px;
     gap: 8px;
   }
-  .topbar .seg { display: none; }
+  .topbar #view-seg { display: none; }
   .topbar #cinematic-toggle { display: none; }
   .sub { display: none; }
   .brand-name { font-size: 15px; }
@@ -1871,35 +1867,28 @@ footer {
     padding: 10px;
   }
 
-  /* Horizontal swipe kanban — one status column at a time */
+  /* One status column at a time, picked by the tabs (.kanban[data-active]).
+     The column grows with its cards and .app is the only scroller:
+     no sideways swipe, no nested scroll area. */
   .kanban {
-    flex-direction: row;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scroll-snap-type: x mandatory;
-    -webkit-overflow-scrolling: touch;
+    flex-direction: column;
+    overflow: visible;
     gap: 10px;
-    align-items: stretch;
-    padding-bottom: 4px;
-    margin: 0 -2px;
   }
   .col {
-    flex: 0 0 calc(100% - 28px);
-    width: calc(100% - 28px);
-    min-width: calc(100% - 28px);
-    max-width: calc(100% - 28px);
-    scroll-snap-align: start;
-    max-height: calc(100dvh - var(--header-h) - var(--chips-h) - var(--nav-h) - var(--safe-b) - 56px);
+    width: 100%;
     display: flex;
     flex-direction: column;
   }
   .col.is-empty { display: none; }
+  .kanban[data-active="Queued"] .col:not([data-col="Queued"]),
+  .kanban[data-active="Building"] .col:not([data-col="Building"]),
+  .kanban[data-active="Review"] .col:not([data-col="Review"]),
+  .kanban[data-active="Blocked"] .col:not([data-col="Blocked"]),
+  .kanban[data-active="Done"] .col:not([data-col="Done"]) { display: none; }
   .col-body {
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
+    overflow: visible;
     min-height: 0;
-    flex: 1 1 auto;
   }
   .card {
     padding: 12px 12px;
@@ -1929,7 +1918,7 @@ footer {
     min-height: 48px;
   }
   .log-head .btn {
-    min-height: 40px;
+    min-height: 44px;
     min-width: 44px;
     padding: 8px 12px;
   }
@@ -2677,6 +2666,13 @@ footer {
 .task-form { flex-direction: column; margin-top: 6px; }
 .chat-form textarea, .task-form input { flex: 1; background: transparent; color: inherit; border: 1px solid var(--border, #333); border-radius: var(--radius-sm, 6px); padding: 6px; font: inherit; }
 
+/* Phone-only chrome (styled in mobile.css). Desktop keeps its layout. */
+.mob-cmd { display: contents; }
+.mob-state, .chat-quick, .chat-add, .mob-now, .toast, .sheet-scrim,
+.sheet-grab, .sheet-head, .chat-send-ico, .chat-sep, .chat-empty, .tp-close { display: none; }
+.task-form .field { display: contents; }
+.task-form .field-label { display: none; }
+
 /* `hidden` must beat every display rule above. Keep last. */
 [hidden] { display: none !important; }
 
@@ -2693,6 +2689,6 @@ footer {
   padding: 3px 8px;
   border: 1px solid currentColor;
   border-radius: 999px;
-  background: inherit;
+  background: var(--bg); /* was inherit from body; the badge now lives inside .app */
 }
 .brand-badge:hover { opacity: 1; }

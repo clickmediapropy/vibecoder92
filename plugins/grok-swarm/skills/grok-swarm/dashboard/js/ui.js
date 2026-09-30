@@ -16,6 +16,7 @@
   var fmtDur = store.fmtDur;
   var relTime = store.relTime;
   var boardCol = window.SwarmBoardColumn;
+  var mobModel = window.SwarmMobileModel;
 
   function $(id) {
     return document.getElementById(id);
@@ -28,8 +29,18 @@
     if (v === "timeline" || v === "guide") return v;
     return "kanban";
   })();
+  /* Phone bottom-nav regions (Guide is a viewMode, not a region). */
+  var MOBILE_VIEWS = ["board", "mission", "ops", "chat"];
   var mobileView = store.prefs.get("mview", "board");
-  if (["board", "mission", "ops", "guide"].indexOf(mobileView) < 0) mobileView = "board";
+  if (MOBILE_VIEWS.indexOf(mobileView) < 0) mobileView = "board";
+  /* Phone chrome state: coordinator liveness comes from /api/mail, the board
+     column the operator picked, the pending control action, chat unread. */
+  var coordAlive = null;
+  var userBoardCol = store.prefs.get("mcol", "");
+  var pendingCtl = null;
+  var confirmPauseUntil = 0;
+  var confirmPauseTimer = null;
+  var lastMail = [];
   var selectedDispatch = null;
   var selectedDispatchSwarm = "";
   var flashMarks = {};
@@ -59,6 +70,32 @@
       console.warn("field." + method + " failed", err);
       return null;
     }
+  }
+
+  /* Phones get the static field: a continuous WebGL loop drains the battery of
+     a device that sits in a pocket watching a swarm. Widening the viewport
+     (rotate a tablet, resize a window) starts the live field; narrowing stops it. */
+  function initFieldForViewport() {
+    var fallback = $("field-fallback");
+    var mq = typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 767px)") : null;
+    function apply() {
+      var narrow = !!(mq && mq.matches);
+      if (narrow) {
+        engineCall("stop");
+        if (fallback) fallback.classList.add("is-on");
+        return;
+      }
+      if (!field) {
+        if (fallback) fallback.classList.remove("is-on");
+        initField();
+      } else if (field.ok && !field.reduced) {
+        if (fallback) fallback.classList.remove("is-on");
+        engineCall("resize");
+        engineCall("start");
+      }
+    }
+    apply();
+    if (mq && typeof mq.addEventListener === "function") mq.addEventListener("change", apply);
   }
 
   function initField() {
@@ -93,7 +130,7 @@
     });
     document.addEventListener("visibilitychange", function () {
       if (document.hidden) engineCall("stop");
-      else engineCall("start");
+      else if (!isNarrow()) engineCall("start");
     });
     if (typeof window.matchMedia === "function") {
       var mq = window.matchMedia("(prefers-color-scheme: dark)");
@@ -292,6 +329,12 @@
   function flashTask(id) {
     var card = document.querySelector('.card[data-task="' + cssEscape(id) + '"]');
     if (!card) return false;
+    /* Phone board shows one column: switch to the card's column first. */
+    var colEl = isNarrow() && card.closest ? card.closest(".col[data-col]") : null;
+    if (colEl) {
+      userBoardCol = colEl.getAttribute("data-col");
+      setBoardCol(userBoardCol);
+    }
     card.scrollIntoView({ behavior: "smooth", block: "center" });
     card.classList.add("flash-target");
     setTimeout(function () {
@@ -615,15 +658,176 @@
     el.hidden = !msg;
     el.textContent = msg || "";
   }
+
+  /* Phone feedback strip above the bottom nav. Errors stay until dismissed. */
+  var toastTimer = null;
+  function showToast(msg, tone) {
+    var el = $("toast");
+    if (!el || !isNarrow()) return;
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = null;
+    if (!msg) {
+      el.hidden = true;
+      return;
+    }
+    $("toast-msg").textContent = msg;
+    el.setAttribute("data-tone", tone || "");
+    el.hidden = false;
+    if (tone !== "bad") {
+      toastTimer = setTimeout(function () {
+        el.hidden = true;
+      }, 4000);
+    }
+  }
+
+  function apiError(r) {
+    return ((r && (r.stderr || r.error || r.stdout)) || "").trim().slice(0, 600);
+  }
+
+  var CTL_DONE = {
+    hold: "On hold. Running builders finish, nothing new starts.",
+    pause: "Paused. Builders stopped, state kept.",
+    resume: "Resumed. Coordinator is restarting.",
+  };
+
+  function ctlButtons() {
+    return ["hold", "pause", "resume"].map(function (a) {
+      return $("ctl-" + a);
+    });
+  }
+
+  function clearPauseConfirm() {
+    confirmPauseUntil = 0;
+    if (confirmPauseTimer) clearTimeout(confirmPauseTimer);
+    confirmPauseTimer = null;
+    var b = $("ctl-pause");
+    if (b) {
+      b.classList.remove("is-confirm");
+      b.textContent = "Pause";
+    }
+  }
+
   function controlAction(action, btn) {
-    btn.disabled = true;
+    /* Pause tree-kills builders. On a phone it takes a second tap within 3s. */
+    if (action === "pause" && isNarrow() && Date.now() > confirmPauseUntil) {
+      confirmPauseUntil = Date.now() + 3000;
+      btn.classList.add("is-confirm");
+      btn.textContent = "Tap to confirm";
+      confirmPauseTimer = setTimeout(clearPauseConfirm, 3000);
+      return;
+    }
+    clearPauseConfirm();
+    pendingCtl = action;
+    ctlButtons().forEach(function (b) {
+      if (b) b.disabled = true;
+    });
+    btn.setAttribute("aria-busy", "true");
     showChatError("");
+    showToast("");
+    function done() {
+      pendingCtl = null;
+      btn.removeAttribute("aria-busy");
+      if (lastState) renderPause(lastState);
+    }
     apiPost("/api/control", { action: action }).then(function (r) {
-      if (!r.ok) showChatError(action + " failed: " + ((r.stderr || r.error || r.stdout || "").trim().slice(0, 600)));
+      if (!r.ok) {
+        showChatError(action + " failed: " + apiError(r));
+        showToast(action.charAt(0).toUpperCase() + action.slice(1) + " failed: " + (apiError(r) || "no output"), "bad");
+      } else {
+        showToast(CTL_DONE[action] || "Done", "ok");
+      }
+      done();
       if (window.SwarmStore && window.SwarmStore.refresh) window.SwarmStore.refresh();
       loadChat();
-    }).catch(function (e) { showChatError(String(e)); btn.disabled = false; });
+    }).catch(function (e) {
+      showChatError(String(e));
+      showToast(String(e), "bad");
+      done();
+    });
   }
+
+  /* Command bar (phone): capsule + which controls apply. Desktop only reads
+     the disabled state renderPause already sets. */
+  function renderCommand() {
+    if (!mobModel || !lastState) return;
+    var ts = Number(lastState.updatedAt || store.lastUpdatedAt || Date.now());
+    var cs = mobModel.commandState(lastState.paused, coordAlive, offline ? 1e9 : Date.now() - ts);
+    var cap = $("mob-state");
+    if (cap) {
+      cap.setAttribute("data-tone", cs.tone);
+      cap.setAttribute("aria-label", "Swarm " + cs.label + (cs.hint ? ": " + cs.hint : ""));
+      $("mob-state-label").textContent = cs.label;
+      var stale = $("mob-state-stale");
+      stale.hidden = !cs.stale;
+      stale.textContent = cs.stale ? (offline ? "offline" : "stale " + fmtStale(cs.stale)) : "";
+    }
+    ["hold", "pause", "resume"].forEach(function (a) {
+      var b = $("ctl-" + a);
+      if (!b) return;
+      var st = cs.buttons[a];
+      b.setAttribute("data-avail", st.enabled ? "1" : "0");
+      b.classList.toggle("is-primary", !!st.primary);
+    });
+  }
+
+  function fmtStale(sec) {
+    return sec < 120 ? sec + "s" : Math.floor(sec / 60) + "m";
+  }
+
+  function pauseSummary() {
+    var s = lastState;
+    if (!s) return "";
+    var p = s.paused;
+    if (!p) {
+      if (coordAlive === false) return "Coordinator is not running. Messages queue until it starts.";
+      return "Live. Hold stops new dispatches; Pause also stops running builders.";
+    }
+    var n = (p.interrupted || []).length;
+    return (
+      (p.noKill ? "On hold" : "Paused") +
+      (p.reason ? ": " + p.reason : "") +
+      (p.pausedAt ? ", since " + new Date(p.pausedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "") +
+      (n ? ", " + n + " interrupted run" + (n === 1 ? "" : "s") : "")
+    );
+  }
+
+  /* ---------- chat ---------- */
+
+  function chatSeenTs() {
+    return Number(store.prefs.get("chatSeen", "0")) || 0;
+  }
+
+  function markChatSeen() {
+    var newest = 0;
+    lastMail.forEach(function (m) {
+      var t = typeof m.timestamp === "number" ? m.timestamp : Date.parse(m.timestamp) || 0;
+      if (t > newest) newest = t;
+    });
+    if (newest > chatSeenTs()) store.prefs.set("chatSeen", String(newest));
+    updateMobBadge("mob-badge-chat", 0, "");
+  }
+
+  function onChatTab() {
+    return isNarrow() && mobileView === "chat" && viewMode !== "guide";
+  }
+
+  function fmtClock(t) {
+    return new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+
+  function sepLabel(t) {
+    var d = new Date(t);
+    var today = new Date();
+    var y = new Date(today.getTime() - 86400000);
+    var day =
+      d.toDateString() === today.toDateString()
+        ? "Today"
+        : d.toDateString() === y.toDateString()
+          ? "Yesterday"
+          : d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+    return day + " · " + fmtClock(t);
+  }
+
   var chatSeen = "";
   function loadChat() {
     var sw = (window.SwarmStore && window.SwarmStore.selectedSwarm) || "";
@@ -631,21 +835,87 @@
     var list = $("chat-list"), status = $("chat-status");
     if (!list) return;
     fetch("/api/mail" + q, { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (d) {
+      coordAlive = !!d.coordinatorAlive;
+      renderCommand();
       if (status) {
         var txt = d.paused ? (d.paused.noKill ? "on hold" : "paused") : (d.coordinatorAlive ? "live" : "coordinator offline — messages queue until Resume");
+        /* Phone header is one line and the command bar already says why. */
+        if (isNarrow() && !d.coordinatorAlive && !d.paused) txt = "offline · messages queue";
         status.textContent = txt;
         status.className = "chat-status" + (d.coordinatorAlive && !d.paused ? " live" : "");
       }
-      var key = (d.messages || []).map(function (m) { return m.id; }).join(",");
+      var messages = d.messages || [];
+      lastMail = messages;
+      /* Unread badge runs every poll, before the no-change early return. */
+      if (onChatTab()) markChatSeen();
+      else if (mobModel) {
+        var u = mobModel.unreadCount(messages, chatSeenTs());
+        updateMobBadge("mob-badge-chat", u.n, u.alert ? "alert" : "");
+      }
+      var key = messages.map(function (m) { return m.id; }).join(",");
       if (key === chatSeen) return;
       chatSeen = key;
-      list.innerHTML = (d.messages || []).map(function (m) {
-        var cls = m.from === "Operator" ? "me" : (m.type === "message" ? "" : "sys");
-        return '<div class="chat-msg ' + cls + '"><b>' + esc(m.from) + (m.to === "@all" ? " → all" : "") + '</b><br>' +
-          esc(m.body || "") + '<time>' + new Date(m.timestamp || 0).toLocaleTimeString() + '</time></div>';
-      }).join("");
-      list.scrollTop = list.scrollHeight;
+      var nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
+      var narrow = isNarrow();
+      var rows = mobModel ? mobModel.groupMessages(messages) : messages.map(function (m) {
+        return { sep: false, kind: m.from === "Operator" ? "me" : m.type === "message" ? "them" : "notice", cont: false, msg: m, ts: Date.parse(m.timestamp) || m.timestamp || 0 };
+      });
+      list.innerHTML = rows.length
+        ? rows.map(function (row) {
+            if (row.sep) return '<div class="chat-sep">' + esc(sepLabel(row.ts)) + "</div>";
+            var m = row.msg;
+            var cls = (row.kind === "me" ? "me" : row.kind === "notice" ? "sys" : "") +
+              " k-" + row.kind + (row.cont ? " cont" : "") + " t-" + esc(m.type || "message");
+            return '<div class="chat-msg ' + cls + '"><b>' + esc(m.from) + (m.to === "@all" ? " → all" : "") + "</b><br>" +
+              esc(m.body || "") + "<time>" + (narrow ? fmtClock(row.ts) : new Date(m.timestamp || 0).toLocaleTimeString()) + "</time></div>";
+          }).join("")
+        : '<div class="chat-empty">No messages yet. Ask the coordinator for a status report, or steer it here.</div>';
+      if (nearBottom || !narrow) list.scrollTop = list.scrollHeight;
     }).catch(function () { /* keep last render */ });
+  }
+
+  function sendChat(text) {
+    var input = $("chat-input");
+    return apiPost("/api/mail", { body: text }).then(function (r) {
+      if (!r.ok) {
+        var msg = "send failed: " + (r.stderr || r.error || "").slice(0, 400);
+        showChatError(msg);
+        showToast("Message not sent: " + (apiError(r) || "no output"), "bad");
+        return false;
+      }
+      showChatError("");
+      loadChat();
+      var list = $("chat-list");
+      if (list) setTimeout(function () { list.scrollTop = list.scrollHeight; }, 400);
+      return true;
+    }).catch(function (err) {
+      showChatError(String(err));
+      showToast("Message not sent: " + String(err), "bad");
+      return false;
+    });
+  }
+
+  function fitComposer() {
+    var input = $("chat-input");
+    if (!input || !isNarrow()) return;
+    input.rows = 1;
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight + 2, 132) + "px";
+    var send = document.querySelector("#chat-form .chat-send");
+    if (send) send.disabled = !input.value.trim();
+  }
+
+  function setTaskSheet(open) {
+    var sheet = $("task-sheet");
+    if (!sheet) return;
+    sheet.open = !!open;
+    if (open) showToast("");
+    var add = $("chat-add");
+    if (add) add.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open && isNarrow()) {
+      var title = $("task-title");
+      if (title) setTimeout(function () { title.focus(); }, 60);
+    }
   }
 
   /* ---------- pause + resume ---------- */
@@ -655,7 +925,9 @@
     var panel = $("resume-panel");
     var list = $("resume-list");
     var hold = $("ctl-hold"), pause = $("ctl-pause"), resume = $("ctl-resume");
-    if (hold && pause && resume) {
+    renderCommand();
+    /* While a control request is in flight its buttons stay locked. */
+    if (hold && pause && resume && !pendingCtl) {
       var p = s.paused;
       hold.disabled = !!p;
       pause.disabled = !!(p && !p.noKill);
@@ -1197,6 +1469,7 @@
     var notes = (t.notes || []).slice(-3);
 
     pop.innerHTML =
+      '<button type="button" class="tp-close">Close</button>' +
       '<div class="tp-title">' +
       esc(t.title) +
       "</div>" +
@@ -1428,6 +1701,7 @@
       return row[1];
     });
     pop.innerHTML =
+      '<button type="button" class="tp-close">Close</button>' +
       '<div class="tp-title">' +
       esc(r.agentLabel || "agent") +
       "</div>" +
@@ -1851,21 +2125,23 @@
   function setMobileView(mode) {
     if (mode === "guide") {
       setView("guide");
-      /* Keep last board/mission/ops region for when user leaves guide. */
+      /* Keep last board/mission/ops/chat region for when user leaves guide. */
     } else {
       if (viewMode === "guide") setView("kanban");
-      mobileView = ["board", "mission", "ops"].indexOf(mode) >= 0 ? mode : "board";
+      mobileView = MOBILE_VIEWS.indexOf(mode) >= 0 ? mode : "board";
       store.prefs.set("mview", mobileView);
     }
     var deck = $("deck");
     if (deck) {
-      deck.classList.remove("mob-board", "mob-mission", "mob-ops", "mob-guide");
+      deck.classList.remove("mob-board", "mob-mission", "mob-ops", "mob-chat", "mob-guide");
       if (viewMode === "guide") deck.classList.add("mob-guide");
       else deck.classList.add("mob-" + mobileView);
     }
     var onBoard = isNarrow() && mobileView === "board" && viewMode !== "guide";
     document.body.classList.toggle("mob-board-view", onBoard);
-    ["board", "mission", "ops", "guide"].forEach(function (m) {
+    var onChat = onChatTab();
+    document.body.classList.toggle("mob-chat-view", onChat);
+    ["board", "mission", "ops", "chat", "guide"].forEach(function (m) {
       var btn = $("mob-" + m);
       if (!btn) return;
       var on = m === "guide" ? viewMode === "guide" : m === mobileView && viewMode !== "guide";
@@ -1875,6 +2151,20 @@
     if (lastState) {
       renderMobChrome(lastState);
       if (onBoard) renderMobChips(lastState);
+    }
+    var chatInput = $("chat-input");
+    if (chatInput) {
+      chatInput.placeholder = isNarrow()
+        ? "Message the coordinator"
+        : "Steer the coordinator… (Enter to send, Shift+Enter newline)";
+    }
+    if (onChat) {
+      markChatSeen();
+      fitComposer();
+      var list = $("chat-list");
+      if (list) list.scrollTop = list.scrollHeight;
+    } else {
+      setTaskSheet(false);
     }
     /* Snap scroll to top of active region when switching tabs (mobile). */
     var app = $("app");
@@ -1898,7 +2188,7 @@
 
   function renderMobChrome(s) {
     if (!isNarrow()) {
-      document.body.classList.remove("mob-board-view", "mob-has-chips");
+      document.body.classList.remove("mob-board-view", "mob-has-chips", "mob-chat-view");
       var chipsOff = $("mob-chips");
       if (chipsOff) chipsOff.hidden = true;
       return;
@@ -1914,6 +2204,7 @@
       blocked || building,
       blocked ? "alert" : building ? "warn" : "",
     );
+    renderMobNow(s);
     var onBoard = mobileView === "board" && viewMode !== "guide";
     document.body.classList.toggle("mob-board-view", onBoard);
     if (onBoard) renderMobChips(s);
@@ -1924,9 +2215,39 @@
     }
   }
 
-  function renderMobChips(s) {
-    var host = $("mob-chips");
-    if (!host || !isNarrow()) return;
+  /* Glanceable mission line at the top of the phone board. */
+  function renderMobNow(s) {
+    var host = $("mob-now");
+    if (!host) return;
+    var st = s.stats || {};
+    var c = st.counts || {};
+    var pct = Number(st.pct || 0);
+    $("mob-now-pct").textContent = pct + "%";
+    $("mob-now-count").textContent = st.total ? (st.done || 0) + " of " + st.total + " done" : "No tracked tasks";
+    var bits = [];
+    var live = liveCount(s);
+    if (live) bits.push(live + " live");
+    if (c.building) bits.push(c.building + " building");
+    if (c.blocked) bits.push(c.blocked + " blocked");
+    if (c.review) bits.push(c.review + " in review");
+    if (etaTargetTs > Date.now()) bits.push("eta ~" + fmtDur(etaTargetTs - Date.now()));
+    $("mob-now-sub").textContent = bits.join(" · ") || (s.goal && s.goal.title) || "";
+    host.setAttribute("aria-label", "Mission " + pct + "% done. Open mission details");
+    var ram = $("mob-now-ram");
+    var hm = s.hostMemory;
+    if (ram && hm && hm.availableGb != null) {
+      var thr = hm.minFreeGb != null ? hm.minFreeGb : 2;
+      var low = !!hm.low || hm.availableGb < thr;
+      var warn = !low && hm.availableGb < thr * 1.5;
+      ram.hidden = !(low || warn);
+      ram.textContent = "RAM " + hm.availableGb + "G";
+      ram.classList.toggle("is-crit", low);
+    } else if (ram) {
+      ram.hidden = true;
+    }
+  }
+
+  function boardCounts(s) {
     var tasks = boardTasks(s);
     var counts = { Queued: 0, Building: 0, Review: 0, Blocked: 0, Done: 0 };
     var buckets =
@@ -1943,6 +2264,24 @@
         if (col && counts[col] !== undefined) counts[col] += 1;
       });
     }
+    var runs = s.runningDispatches || [];
+    var hasLive = runs.some(function (r) {
+      return boardCol && !!boardCol.liveColumnForRole(boardCol.roleFromAgentLabel(r.agentLabel));
+    });
+    var live =
+      hasLive && buckets && boardCol && typeof boardCol.preferredBoardColumn === "function"
+        ? boardCol.preferredBoardColumn(buckets, runs)
+        : "";
+    return { counts: counts, live: live };
+  }
+
+  /* Status tabs: one column at a time. The operator's pick wins while it has
+     cards, then the column with live work, then SwarmMobileModel.defaultColumn. */
+  function renderMobChips(s) {
+    var host = $("mob-chips");
+    if (!host || !isNarrow()) return;
+    var bc = boardCounts(s);
+    var counts = bc.counts;
     var order = ["Queued", "Building", "Review", "Blocked", "Done"];
     var nonEmpty = order.filter(function (name) {
       return counts[name] > 0;
@@ -1951,26 +2290,22 @@
       host.hidden = true;
       document.body.classList.remove("mob-has-chips");
       host.innerHTML = "";
+      setBoardCol("");
       return;
     }
     host.hidden = false;
     document.body.classList.add("mob-has-chips");
-    var runs = s.runningDispatches || [];
-    var hasLive = runs.some(function (r) {
-      return boardCol && !!boardCol.liveColumnForRole(boardCol.roleFromAgentLabel(r.agentLabel));
-    });
-    var preferred =
-      hasLive && buckets && boardCol && typeof boardCol.preferredBoardColumn === "function"
-        ? boardCol.preferredBoardColumn(buckets, runs)
-        : "";
-    var activeCol = preferred || host.getAttribute("data-active") || nonEmpty[0];
-    if (nonEmpty.indexOf(activeCol) < 0) activeCol = nonEmpty[0];
+    var activeCol = mobModel
+      ? mobModel.pickColumn(counts, userBoardCol, bc.live)
+      : bc.live || nonEmpty[0];
     host.innerHTML = nonEmpty
       .map(function (name) {
+        var on = name === activeCol;
         return (
-          '<button type="button" class="chip' +
-          (name === activeCol ? " active" : "") +
-          (counts[name] === 0 ? " is-zero" : "") +
+          '<button type="button" role="tab" class="chip' +
+          (on ? " active" : "") +
+          '" aria-selected="' +
+          (on ? "true" : "false") +
           '" data-col="' +
           esc(name) +
           '">' +
@@ -1981,42 +2316,23 @@
         );
       })
       .join("");
+    setBoardCol(activeCol);
   }
 
-  function scrollKanbanToCol(name, instant) {
+  function setBoardCol(name) {
     var host = $("kanban-view");
-    if (!host) return;
-    var col = host.querySelector('.col[data-col="' + name + '"]');
-    if (!col) return;
+    if (host) {
+      if (name) host.setAttribute("data-active", name);
+      else host.removeAttribute("data-active");
+    }
     var chips = $("mob-chips");
-    if (chips) {
-      chips.setAttribute("data-active", name);
-      Array.prototype.forEach.call(chips.querySelectorAll(".chip"), function (btn) {
-        btn.classList.toggle("active", btn.getAttribute("data-col") === name);
-      });
-    }
-    try {
-      col.scrollIntoView({
-        behavior: instant ? "auto" : "smooth",
-        inline: "center",
-        block: "nearest",
-      });
-    } catch (e) {
-      col.scrollIntoView();
-    }
-  }
-
-  function snapMobileToLive(s) {
-    if (!isNarrow() || mobileView !== "board" || viewMode === "guide") return;
-    if (!boardCol || typeof boardCol.preferredBoardColumn !== "function") return;
-    var runs = s.runningDispatches || [];
-    var hasLive = runs.some(function (r) {
-      return !!boardCol.liveColumnForRole(boardCol.roleFromAgentLabel(r.agentLabel));
+    if (!chips) return;
+    chips.setAttribute("data-active", name || "");
+    Array.prototype.forEach.call(chips.querySelectorAll(".chip"), function (btn) {
+      var on = btn.getAttribute("data-col") === name;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
     });
-    if (!hasLive) return;
-    var buckets = boardCol.bucketTasks(boardTasks(s), runs);
-    var name = boardCol.preferredBoardColumn(buckets, runs);
-    if (name) scrollKanbanToCol(name, true);
   }
 
   /* ---------- log sheet ---------- */
@@ -2132,6 +2448,7 @@
     if (!footerAgeTimer) {
       footerAgeTimer = setInterval(function () {
         if (lastState && !offline) renderFooter(lastState);
+        renderCommand();
       }, 1000);
     }
   }
@@ -2152,6 +2469,7 @@
         "Cannot reach /api/state. Reopen this page or restart: swarm dashboard --daemon --port 4599";
     }
     if ($("footer")) $("footer").textContent = "Connection lost. Is the dashboard process running?";
+    renderCommand();
   }
 
   function onConnOk() {
@@ -2242,10 +2560,8 @@
     renderMobChrome(s);
 
     /* Restore interaction chrome the full rebuild would otherwise drop.
-       Live overlay snap runs after restore so a saved Queued scrollLeft
-       cannot hide the logger on the phone. */
+       The phone board column comes from renderMobChips (pickColumn). */
     restoreScroll(scrollSnap);
-    snapMobileToLive(s);
     if (taskPopId) {
       var card = document.querySelector('.card[data-task="' + cssEscape(taskPopId) + '"]');
       if (card) showTaskPopover(taskPopId, card);
@@ -2313,6 +2629,10 @@
       var b = $("ctl-" + a);
       if (b) b.onclick = function () { controlAction(a, b); };
     });
+    var cap = $("mob-state");
+    if (cap) cap.onclick = function () { showToast(pauseSummary(), ""); };
+    if ($("toast-x")) $("toast-x").onclick = function () { showToast(""); };
+
     var chatForm = $("chat-form"), chatInput = $("chat-input");
     if (chatForm && chatInput) {
       chatForm.onsubmit = function (e) {
@@ -2320,32 +2640,58 @@
         var text = chatInput.value.trim();
         if (!text) return;
         chatInput.disabled = true;
-        apiPost("/api/mail", { body: text }).then(function (r) {
+        sendChat(text).then(function (ok) {
           chatInput.disabled = false;
-          if (!r.ok) { showChatError("send failed: " + (r.stderr || r.error || "").slice(0, 400)); return; }
-          chatInput.value = "";
-          showChatError("");
-          loadChat();
-        }).catch(function (err) { chatInput.disabled = false; showChatError(String(err)); });
+          if (ok) chatInput.value = "";
+          fitComposer();
+        });
       };
       chatInput.addEventListener("keydown", function (e) {
-        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); chatForm.requestSubmit(); }
+        if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); chatForm.requestSubmit(); }
+      });
+      chatInput.addEventListener("input", fitComposer);
+    }
+    var quick = $("chat-quick");
+    if (quick) {
+      quick.addEventListener("click", function (e) {
+        var chip = e.target.closest ? e.target.closest(".chat-chip[data-say]") : null;
+        if (!chip || chip.disabled) return;
+        chip.disabled = true;
+        sendChat(chip.getAttribute("data-say")).then(function (ok) {
+          chip.disabled = false;
+          if (ok) showToast("Sent: " + chip.textContent.trim(), "ok");
+        });
       });
     }
     var taskForm = $("task-form");
     if (taskForm) {
       taskForm.onsubmit = function (e) {
         e.preventDefault();
+        var title = $("task-title").value;
         apiPost("/api/task", {
-          title: $("task-title").value, files: $("task-files").value, acceptance: $("task-acceptance").value,
+          title: title, files: $("task-files").value, acceptance: $("task-acceptance").value,
         }).then(function (r) {
-          if (!r.ok) { showChatError("task create failed: " + (r.stderr || r.stdout || r.error || "").slice(0, 600)); return; }
+          if (!r.ok) {
+            showChatError("task create failed: " + (r.stderr || r.stdout || r.error || "").slice(0, 600));
+            showToast("Task not created: " + (apiError(r) || "no output"), "bad");
+            return;
+          }
           showChatError("");
           taskForm.reset();
+          setTaskSheet(false);
+          showToast("Task created: " + title, "ok");
           if (window.SwarmStore && window.SwarmStore.refresh) window.SwarmStore.refresh();
+        }).catch(function (err) {
+          showToast("Task not created: " + String(err), "bad");
         });
       };
     }
+    if ($("chat-add")) $("chat-add").onclick = function () {
+      var sheet = $("task-sheet");
+      setTaskSheet(!(sheet && sheet.open));
+    };
+    if ($("task-sheet-close")) $("task-sheet-close").onclick = function () { setTaskSheet(false); };
+    if ($("sheet-scrim")) $("sheet-scrim").onclick = function () { setTaskSheet(false); };
     if (window.SwarmStore && window.SwarmStore.on) window.SwarmStore.on("tick", loadChat);
     loadChat();
 
@@ -2366,43 +2712,39 @@
         var btn = e.target.closest ? e.target.closest(".chip[data-col]") : null;
         if (!btn) return;
         e.preventDefault();
-        scrollKanbanToCol(btn.getAttribute("data-col") || "");
+        userBoardCol = btn.getAttribute("data-col") || "";
+        store.prefs.set("mcol", userBoardCol);
+        setBoardCol(userBoardCol);
+        var app = $("app");
+        if (app) app.scrollTop = 0;
       });
     }
-    /* Keep kanban chip highlight in sync with horizontal scroll. */
-    var kanban = $("kanban-view");
-    if (kanban) {
-      var chipScrollT = null;
-      kanban.addEventListener(
-        "scroll",
-        function () {
-          if (!isNarrow() || mobileView !== "board") return;
-          if (chipScrollT) clearTimeout(chipScrollT);
-          chipScrollT = setTimeout(function () {
-            var cols = kanban.querySelectorAll(".col[data-col]");
-            if (!cols.length) return;
-            var mid = kanban.scrollLeft + kanban.clientWidth / 2;
-            var best = null;
-            var bestDist = Infinity;
-            Array.prototype.forEach.call(cols, function (col) {
-              var center = col.offsetLeft + col.offsetWidth / 2;
-              var d = Math.abs(center - mid);
-              if (d < bestDist) {
-                bestDist = d;
-                best = col.getAttribute("data-col");
-              }
-            });
-            if (best && chips) {
-              chips.setAttribute("data-active", best);
-              Array.prototype.forEach.call(chips.querySelectorAll(".chip"), function (btn) {
-                btn.classList.toggle("active", btn.getAttribute("data-col") === best);
-              });
-            }
-          }, 80);
-        },
-        { passive: true },
-      );
+    if ($("mob-now")) $("mob-now").onclick = function () { setMobileView("mission"); };
+
+    /* iOS keeps the layout viewport when the keyboard opens; track the visual
+       viewport so the composer and task sheet stay above the keyboard. */
+    var vv = window.visualViewport;
+    if (vv) {
+      var syncVV = function () {
+        var kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+        var open = isNarrow() && kb > 120;
+        var rs = document.documentElement.style;
+        document.body.classList.toggle("kb-open", open);
+        rs.setProperty("--m-vvh", vv.height + "px");
+        rs.setProperty("--m-vvtop", vv.offsetTop + "px");
+      };
+      vv.addEventListener("resize", syncVV);
+      vv.addEventListener("scroll", syncVV);
     }
+    ["task-pop", "run-pop"].forEach(function (id) {
+      var pop = $(id);
+      if (!pop) return;
+      pop.addEventListener("click", function (e) {
+        if (e.target.closest && e.target.closest(".tp-close")) {
+          try { pop.hidePopover(); } catch (err) { /* already closed */ }
+        }
+      });
+    });
     setMobileView(mobileView);
     window.addEventListener("resize", function () {
       setMobileView(viewMode === "guide" ? "guide" : mobileView);
@@ -2582,6 +2924,6 @@
   store.on("connok", onConnOk);
 
   wire();
-  initField();
+  initFieldForViewport();
   store.init();
 })();

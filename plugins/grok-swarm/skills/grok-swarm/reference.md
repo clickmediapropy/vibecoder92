@@ -335,6 +335,14 @@ Serves `templates/dashboard.html` (static template) at `http://127.0.0.1:<port>/
 
 Pidfile: `.grok-swarm/dashboard.pid` (repo-scoped, not per-swarm). `--port 0` picks a free port (foreground only). Localhost only.
 
+Phones (≤767px, `dashboard/css/mobile.css` + `dashboard/js/mobile-model.js`) get:
+- A command bar: a state capsule plus only the Hold, Pause or Resume actions that apply right now. Pause needs a second tap.
+- A Chat tab with an unread badge, one-tap prompts and an add-task sheet.
+- A board that shows one status column at a time.
+- A static field instead of WebGL.
+
+Open it through the tailscale URL that `swarm dashboard status` prints. It installs to the home screen through `dashboard/manifest.json`.
+
 ### watch (terminal live view — no HTTP daemon)
 ```bash
 swarm watch                    # live refresh every 2s (TTY)
