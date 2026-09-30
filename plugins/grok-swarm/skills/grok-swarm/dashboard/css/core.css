@@ -2669,7 +2669,8 @@ footer {
 /* Phone-only chrome (styled in mobile.css). Desktop keeps its layout. */
 .mob-cmd { display: contents; }
 .mob-state, .chat-quick, .chat-add, .mob-now, .toast, .sheet-scrim,
-.sheet-grab, .sheet-head, .chat-send-ico, .chat-sep, .chat-empty, .tp-close { display: none; }
+.sheet-grab, .sheet-head, .chat-send-ico, .chat-sep, .chat-empty, .tp-close,
+.card-who, .card-timer { display: none; }
 .task-form .field { display: contents; }
 .task-form .field-label { display: none; }
 

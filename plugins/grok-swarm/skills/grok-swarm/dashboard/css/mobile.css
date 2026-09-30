@@ -255,7 +255,45 @@
   .col-review .card { --card-accent: var(--purple); }
   .col-blocked .card { --card-accent: var(--red); }
   .col-done .card { --card-accent: var(--green); }
-  .card .title { font-size: 15px; line-height: 1.35; }
+  .card .title { font-size: 15px; line-height: 1.35; padding-right: 40px; }
+  /* Owner avatar: initials on a stable per-owner hue (SwarmMobileModel.ownerHue). */
+  .card-who {
+    display: grid;
+    place-items: center;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: 750;
+    letter-spacing: 0.02em;
+    color: light-dark(oklch(0.38 0.12 var(--who-h)), oklch(0.9 0.08 var(--who-h)));
+    background: light-dark(oklch(0.92 0.05 var(--who-h)), oklch(0.36 0.09 var(--who-h)));
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--bg) 70%, transparent);
+  }
+  /* Live timer for running work: pushed to the end of the pill row. */
+  .card-timer {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    color: var(--blue-ink);
+  }
+  .card-timer::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--blue);
+    box-shadow: 0 0 0 3px var(--blue-soft);
+    animation: dot-pulse 1.9s ease infinite;
+  }
   .card .friendly { font-size: 13px; margin-top: 4px; }
   .card .pills { margin-top: 10px; gap: 6px; }
   .card .pill { font-size: 11.5px; padding: 3px 9px; }

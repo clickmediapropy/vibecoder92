@@ -992,6 +992,27 @@
         ? '<span class="pill pill-pack">' + esc(shortSwarm(t.swarmId, t.swarmTitle)) + "</span>"
         : "";
     var owner = (live && live.agentLabel) || t.ownerAgentLabel;
+    /* Phone card chrome (hidden on desktop by core.css): owner avatar, and a
+       live timer for running work. tickRunElapsed advances every [data-elapsed]. */
+    var who =
+      owner && mobModel
+        ? '<span class="card-who" style="--who-h:' +
+          mobModel.ownerHue(owner) +
+          '" aria-hidden="true">' +
+          esc(mobModel.initials(owner)) +
+          "</span>"
+        : "";
+    var runMs = live && live.elapsedMs != null ? Number(live.elapsedMs) : null;
+    var timer =
+      runMs != null
+        ? '<span class="card-timer" data-elapsed="' +
+          runMs +
+          '" data-at="' +
+          Date.now() +
+          '" title="Running for">' +
+          esc(fmtDur(runMs)) +
+          "</span>"
+        : "";
     return (
       '<div class="card' +
       (live || runningIds.has(t.id) ? " building-glow" : "") +
@@ -1002,6 +1023,7 @@
       '" style="view-transition-name:' +
       vtName(t.id) +
       '">' +
+      who +
       '<div class="title">' +
       esc(t.title) +
       "</div>" +
@@ -1012,6 +1034,7 @@
       statusPill(t.status) +
       (owner ? '<span class="pill pill-owner">' + esc(owner) + "</span>" : "") +
       pack +
+      timer +
       "</div></div>"
     );
   }

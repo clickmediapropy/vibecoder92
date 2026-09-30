@@ -137,7 +137,25 @@
     return out;
   }
 
+  /** Card avatar text: "Builder Shell" -> "BS", "Reviewer" -> "RE", "" -> "". */
+  function initials(label) {
+    var words = String(label || "").trim().split(/[\s_\-]+/).filter(Boolean);
+    if (!words.length) return "";
+    if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+    return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+  }
+
+  /** Stable avatar hue (0-359) per owner, so the same agent keeps its color. */
+  function ownerHue(label) {
+    var s = String(label || "");
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return h % 360;
+  }
+
   var api = {
+    initials: initials,
+    ownerHue: ownerHue,
     STALE_MS: STALE_MS,
     COLUMNS: COLUMNS,
     commandState: commandState,
